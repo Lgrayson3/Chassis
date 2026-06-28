@@ -1,0 +1,3553 @@
+{  
+  "name": "chassis-clinic",  
+  "version": "1.0.0",  
+  "private": true,  
+  "dependencies": {  
+    "react": "^18.2.0",  
+    "react-dom": "^18.2.0",  
+    "react-router-dom": "^6.20.0",  
+    "@supabase/supabase-js": "^2.39.0",  
+    "recharts": "^2.10.0",  
+    "react-scripts": "5.0.1"  
+  },  
+  "scripts": {  
+    "start": "react-scripts start",  
+    "build": "react-scripts build"  
+  },  
+  "browserslist": {  
+    "production": \["\>0.2%", "not dead", "not op\_mini all"\],  
+    "development": \["last 1 chrome version", "last 1 firefox version", "last 1 safari version"\]  
+  }  
+}
+
+# Day 2 Build Spec
+
+markdown  
+**\# Chassis — Build Specification**  
+\*\*Issued by:\*\* Senior Developer    
+\*\*Audience:\*\* Junior Developer (you)    
+\*\*Version:\*\* 1.0    
+\*\*Status:\*\* Actionable — execute phases in order
+
+\---
+
+**\#\# How to use this document**
+
+Each task has a \*\*Spec\*\* (what to build and how), \*\*Acceptance Criteria\*\* (how you know it's done), and \*\*Notes\*\* (traps and decisions made for you). Do not skip the Notes section — that is where the non-obvious requirements live.
+
+Do not start Phase 2 until Phase 1 is complete and verified. The phases are sequenced by dependency, not by complexity.
+
+\---
+
+**\#\# Phase 1 — Foundational Infrastructure**
+
+\> Nothing in the app compiles or runs until this phase is complete. Prioritize it above all else.
+
+\---
+
+**\#\#\# Task 1.1 — \`mobile/src/lib/supabase.ts\`**
+
+\*\*Spec\*\*
+
+Create the Supabase client singleton used by all screens and hooks.
+
+\`\`\`ts  
+import AsyncStorage from '@react-native-async-storage/async-storage'  
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl \= process.env.EXPO\_PUBLIC\_SUPABASE\_URL\!  
+const supabaseAnonKey \= process.env.EXPO\_PUBLIC\_SUPABASE\_ANON\_KEY\!
+
+export const supabase \= createClient(supabaseUrl, supabaseAnonKey, {  
+  auth: {  
+    storage: AsyncStorage,  
+    autoRefreshToken: true,  
+    persistSession: true,  
+    detectSessionInUrl: false,  
+  },  
+})  
+\`\`\`
+
+\*\*Acceptance Criteria\*\*  
+\- File exports a named \`supabase\` constant  
+\- \`.env\` keys are \`EXPO\_PUBLIC\_SUPABASE\_URL\` and \`EXPO\_PUBLIC\_SUPABASE\_ANON\_KEY\` (Expo requires the \`EXPO\_PUBLIC\_\` prefix for client-side env access)  
+\- No hardcoded credentials anywhere
+
+\*\*Notes\*\*  
+\- \`detectSessionInUrl: false\` is required for React Native — URL-based auth detection is a web-only feature and will cause errors in the native runtime  
+\- \`AsyncStorage\` is the storage adapter that persists the session across app restarts. Without it, every app open logs the user out.
+
+\---
+
+**\#\#\# Task 1.2 — \`mobile/src/hooks/useAuth.tsx\`**
+
+\*\*Spec\*\*
+
+Create an auth context provider and consumer hook. This file does two things: exports \`AuthProvider\` (a React context provider that wraps the app) and exports \`useAuth\` (a hook any screen can call to get the current auth state).
+
+The context value shape:  
+\`\`\`ts  
+interface AuthContext {  
+  session: Session | null  
+  user: User | null  
+  loading: boolean  
+  signIn: (email: string, password: string) \=\> Promise  
+  signUp: (email: string, password: string) \=\> Promise  
+  signOut: () \=\> Promise  
+}  
+\`\`\`
+
+Implementation requirements:  
+\- On mount, call \`supabase.auth.getSession()\` to hydrate initial state  
+\- Subscribe to \`supabase.auth.onAuthStateChange()\` to keep state in sync  
+\- Unsubscribe from the listener in the useEffect cleanup function  
+\- Set \`loading: false\` only after the initial session check resolves  
+\- \`signIn\` and \`signUp\` should throw on error so the calling component can catch and display the message — do not swallow errors here
+
+Wrap \`AppNavigator.tsx\` children with \`\<AuthProvider\>\` in the root of the app (or in \`App.tsx\` if one exists — check the Expo entry point).
+
+\*\*Acceptance Criteria\*\*  
+\- Any screen can call \`const { user, session, signOut } \= useAuth()\` and get live values  
+\- Session persists across app restarts (verifiable by logging in, force-quitting, and reopening)  
+\- \`loading\` is \`true\` until the initial session hydration is complete — the navigator should show nothing (already returns null) during this window
+
+\*\*Notes\*\*  
+\- The navigator already handles the \`loading\` case: \`if (loading) return null\`. Do not change that logic.  
+\- Do not use \`useState\` for the auth listener setup. Use \`useEffect\` with the cleanup return.
+
+\---
+
+**\#\#\# Task 1.3 — \`mobile/src/hooks/usePushNotifications.ts\`**
+
+\*\*Spec\*\*
+
+Registers the device for push notifications and persists the Expo push token to the user's profile row.
+
+Logic:  
+1\. Check \`Device.isDevice\` — if false (simulator), skip registration entirely, return null gracefully  
+2\. Request permissions via \`Notifications.requestPermissionsAsync()\`  
+3\. If permission not granted, return null — do not throw, do not alert  
+4\. Get token via \`Notifications.getExpoPushTokenAsync()\`  
+5\. Upsert token to \`profiles\` table: \`.from('profiles').update({ push\_token: token.data }).eq('id', user.id)\`  
+6\. Set up notification response listener so foreground notifications are handled (display them using \`setNotificationHandler\`)
+
+\*\*Acceptance Criteria\*\*  
+\- Token is written to \`profiles.push\_token\` after first app open on a real device  
+\- Simulator does not crash or show errors  
+\- Permission denial is handled silently
+
+\*\*Notes\*\*  
+\- This hook is already called in \`AppNavigator.tsx\` with \`usePushNotifications()\`. Do not move that call.  
+\- \`expo-notifications\` and \`expo-device\` are already in \`package.json\`. No additional installs needed.  
+\- The token written here is what \`nudge-dispatcher\` reads to send push notifications. The column must be named \`push\_token\` in the schema.
+
+\---
+
+**\#\#\# Task 1.4 — Tab Bar Icons**
+
+\*\*Spec\*\*
+
+Fix the broken \`tabBarIcon\` configuration in \`AppNavigator.tsx\`. The current string values (\`'home'\`, \`'restaurant'\`, etc.) do nothing.
+
+Replace each \`Tab.Screen\` options block:
+
+\`\`\`tsx  
+import { Ionicons } from '@expo/vector-icons'
+
+// Today  
+options={{  
+  tabBarIcon: ({ color, size }) \=\> (  
+      
+  ),  
+}}
+
+// Meals  
+options={{  
+  tabBarIcon: ({ color, size }) \=\> (  
+      
+  ),  
+}}
+
+// Grocery  
+options={{  
+  tabBarIcon: ({ color, size }) \=\> (  
+      
+  ),  
+}}
+
+// Train  
+options={{  
+  tabBarIcon: ({ color, size }) \=\> (  
+      
+  ),  
+}}  
+\`\`\`
+
+\*\*Acceptance Criteria\*\*  
+\- All four tabs display icons in their inactive color (\`\#64748b\`) and active color (\`\#0ea5e9\`)  
+\- No TypeScript errors
+
+\*\*Notes\*\*  
+\- \`@expo/vector-icons\` ships with Expo — it is already available, no install needed  
+\- Use outline variants (the default for Ionicons named without \`-outline\` suffix still uses outlined style at this size). Do not use \`-filled\` suffixes.
+
+\---
+
+**\#\#\# Task 1.5 — Data Files**
+
+\*\*Spec\*\*
+
+Create two JSON files. They must exist at both \`shared/\` (source of truth) and \`mobile/src/data/\` (bundled copy). The screens import from \`../data/\` so both paths must exist.
+
+\*\*\`meals.json\` — each meal object:\*\*  
+\`\`\`json  
+{  
+  "id": "meal\_001",  
+  "name": "Greek Yogurt Parfait",  
+  "protein\_g": 23,  
+  "calories": 280,  
+  "carbs\_g": 28,  
+  "fat\_g": 6,  
+  "prep\_time\_min": 5,  
+  "texture": \["soft", "standard"\],  
+  "meal\_types": \["breakfast", "snack"\],  
+  "ingredients": \[  
+    { "name": "Greek yogurt (2% fat)", "quantity": 1, "unit": "cup" },  
+    { "name": "Mixed berries", "quantity": 0.5, "unit": "cup" },  
+    { "name": "Granola", "quantity": 0.25, "unit": "cup" }  
+  \],  
+  "grocery\_category": "Dairy & Eggs"  
+}  
+\`\`\`
+
+Minimum 42 meals. Distribute across:  
+\- Texture: at least 8 \`liquid\`, 14 \`soft\`, 20 \`standard\`  
+\- Meal types: breakfast, lunch, dinner, snack  
+\- Protein range: 15g–45g per meal  
+\- GLP-1 appropriate: high protein, low volume, easy to tolerate
+
+\*\*\`workouts.json\` — structure:\*\*  
+\`\`\`json  
+{  
+  "glp1": {  
+    "day1": {  
+      "name": "Lower Body Foundation",  
+      "duration\_min": 25,  
+      "exercises": \[  
+        {  
+          "name": "Goblet Squat",  
+          "sets": 3,  
+          "reps": "10–12",  
+          "cue": "Chest up, drive through heels",  
+          "band\_mod": "Loop band above knees for stability"  
+        }  
+      \]  
+    },  
+    "day2": { ... },  
+    "day3": { ... }  
+  },  
+  "longevity": {  
+    "day1": { ... },  
+    "day2": { ... },  
+    "day3": { ... }  
+  }  
+}  
+\`\`\`
+
+Each tier needs 3 days. Each day needs 4–6 exercises. GLP-1 tier: moderate resistance, no high-intensity. Longevity tier: mobility-forward, joint-friendly, slightly higher volume.
+
+\*\*Acceptance Criteria\*\*  
+\- \`MealsScreen\` renders meal cards without import errors  
+\- \`TrainScreen\` renders exercises without import errors  
+\- All 42 meals have valid \`texture\` and \`meal\_types\` arrays (these drive the filter UI)
+
+\---
+
+**\#\# Phase 2 — OnboardingScreen**
+
+\> Runtime crash for new users until this exists. Build before any other screens.
+
+\---
+
+**\#\#\# Task 2.1 — \`mobile/src/screens/OnboardingScreen.tsx\`**
+
+\*\*Spec\*\*
+
+A single-screen component managing a 6-step flow via local \`step\` state (0–5). Do not use separate routes for each step — manage it all in one component with a step counter.
+
+\*\*Layout:\*\* Progress bar at top (thin, sky blue, fills proportionally as steps advance). Step content in center. "Continue" primary button at bottom. "Back" text link above it for steps \> 0\.
+
+\*\*Step 0 — Name\*\*  
+\- Single \`TextInput\` for first name  
+\- Label: "What should we call you?"  
+\- Validation: non-empty, no numbers  
+\- Store in local state, commit to DB on final step
+
+\*\*Step 1 — Body Weight \+ Protein Target\*\*  
+\- Numeric input for body weight in lbs  
+\- Below the input, show: \`"Your daily protein goal: Xg"\` — auto-calculated as \`Math.round(lbs / 5\) \* 5\` (rounded to nearest 5g)  
+\- Below that, a \`Slider\` component from \`@react-native-community/slider\` ranging ±50g from the calculated value, step 5  
+\- Label: "Adjust if your physician has given you a different target"  
+\- Store both \`body\_weight\_lbs\` and final \`protein\_target\_g\`  
+\- Convert weight to kg for DB: \`body\_weight\_kg \= Math.round(lbs \* 0.453592 \* 10\) / 10\`
+
+\*\*Step 2 — Medication Tier\*\*  
+\- Two large tappable cards, full-width, stacked vertically  
+\- Card 1: "GLP-1 Program" — subtitle: "Semaglutide, tirzepatide, or similar — lower volume, texture-aware training"  
+\- Card 2: "Longevity Program" — subtitle: "General health optimization — higher volume, mobility-forward training"  
+\- Selected card: border color \`\#0ea5e9\`, background slightly tinted  
+\- Maps to \`tier\` field: \`'glp1'\` or \`'longevity'\`
+
+\*\*Step 3 — Clinic Code\*\*  
+\- Single \`TextInput\`, placeholder: "Referral code (optional)"  
+\- Subtext: "Leave blank if you weren't referred by a clinic"  
+\- On "Continue": if field is non-empty, call \`supabase.from('clinics').select('id').eq('referral\_code', code).single()\`  
+  \- If found: store \`clinic\_id\` for DB write  
+  \- If not found: show inline error "That code doesn't match any clinic. Check with your provider." — do not block progress, allow continuing with blank  
+\- If field is empty: proceed immediately, \`clinic\_id\` remains null
+
+\*\*Step 4 — Notifications\*\*  
+\- Toggle row: "Daily meal reminders" (default on)  
+\- Toggle row: "Hydration nudges" (default on)    
+\- Time picker row: "First reminder at" — show a simple time picker (hour \+ AM/PM). Default: 8:00 AM  
+\- Store preferences in local state for DB write
+
+\*\*Step 5 — Summary\*\*  
+\- Show: name, protein target, program tier, clinic (if set, show clinic name fetched in step 3; else "Independent")  
+\- CTA button: "Start my program"  
+\- On press: run the commit sequence (see below)
+
+\*\*Commit sequence on Step 5 CTA:\*\*  
+\`\`\`ts  
+// 1\. Upsert profile  
+await supabase.from('profiles').upsert({  
+  id: user.id,  
+  first\_name,  
+  body\_weight\_kg,  
+  protein\_target\_g,  
+  tier,  
+  clinic\_id: clinic\_id || null,  
+  hydration\_target\_oz: 64,  
+  onboarding\_complete: true,  
+  notification\_meal\_reminder: mealReminderEnabled,  
+  notification\_hydration: hydrationNudgesEnabled,  
+  first\_reminder\_time: firstReminderTime, // store as 'HH:MM' string  
+})
+
+// 2\. Update auth metadata so navigator gate passes  
+await supabase.auth.updateUser({  
+  data: { onboarding\_complete: true }  
+})  
+\`\`\`
+
+If either call fails, show an \`Alert\` with the error and do not advance. Do not leave the user stuck on a blank screen.
+
+\*\*Acceptance Criteria\*\*  
+\- New user signs up → sees onboarding → completes all steps → lands on TodayScreen  
+\- Navigator does not re-show onboarding on subsequent app opens  
+\- Clinic code validation shows inline error but does not block progress  
+\- Back button works on all steps except step 0
+
+\*\*Notes\*\*  
+\- \`@react-native-community/slider\` may need installing: \`npm install @react-native-community/slider\`  
+\- The navigator gate checks \`user?.user\_metadata?.onboarding\_complete\`. The \`supabase.auth.updateUser()\` call in step 5 is what flips this flag. Without it, the user lands back on OnboardingScreen every time.  
+\- Do not try to persist partial onboarding progress across app restarts for V1. If they quit mid-flow, they start over. The complexity isn't worth it yet.
+
+\---
+
+**\#\# Phase 3 — Log Bottom Sheet**
+
+\> This is the most important interaction in the entire app. Build it carefully.
+
+\---
+
+**\#\#\# Task 3.1 — \`mobile/src/components/LogBottomSheet.tsx\`**
+
+\*\*Spec\*\*
+
+A React Native \`Modal\` with \`presentationStyle="pageSheet"\` (iOS) and \`animationType="slide"\`. This is not a full-screen modal — it slides up from the bottom and covers approximately the bottom 65% of the screen.
+
+\*\*Internal state:\*\*  
+\`\`\`ts  
+const \[activeTab, setActiveTab\] \= useState('protein')  
+const \[proteinMode, setProteinMode\] \= useState('meals')  
+const \[customGrams, setCustomGrams\] \= useState('')  
+\`\`\`
+
+\*\*Props:\*\*  
+\`\`\`ts  
+interface LogBottomSheetProps {  
+  visible: boolean  
+  onDismiss: () \=\> void  
+  onLogged: () \=\> void  // callback to refresh TodayScreen data  
+  defaultTab?: 'protein' | 'hydration'  
+}  
+\`\`\`
+
+\*\*Header:\*\*  
+\- Two tabs: "Protein" | "Hydration" — pill-style toggle, same style as MealsScreen filter chips  
+\- X button top-right to dismiss
+
+\*\*Protein tab — three sub-modes (segmented control under the tab):\*\*
+
+*\*Meals mode (default):\**  
+\- Pull from \`meal\_selections\` for the current week. Join with \`meals.json\` to get names and protein\_g.  
+\- For each selection, show a card: meal name, Xg protein, time slot (breakfast/lunch/dinner/snack)  
+\- Already-logged meals this session: show a green checkmark badge, still tappable to log again if they ate twice  
+\- Tap → \`insertProteinLog(meal.protein\_g, meal.id)\` → success haptic → brief green flash on card → sheet stays open so they can log multiple
+
+*\*Quick Select mode:\**  
+\- 12-item grid (3 columns × 4 rows) of common protein items  
+\- Hard-code these: "Chicken breast 4oz (35g)", "Greek yogurt (20g)", "Protein shake (25g)", "2 eggs (12g)", "Cottage cheese ½c (14g)", "Tuna pouch (20g)", "Shrimp 4oz (24g)", "Beef 3oz (22g)", "Turkey slice 3oz (18g)", "Edamame ½c (9g)", "Lentils ½c (9g)", "Tofu 4oz (10g)"  
+\- Tap any → immediately logs that gram value → success haptic → item briefly highlights green
+
+*\*Custom mode:\**  
+\- Numeric \`TextInput\` labeled "Enter grams"  
+\- "Log Protein" button  
+\- On submit: validate \> 0, insert to DB, haptic, clear field
+
+\*\*Hydration tab:\*\*  
+\- Four large buttons in a 2×2 grid: "8 oz", "16 oz", "24 oz", "32 oz"  
+\- Label above: "How much did you drink?"  
+\- Tap any → immediately inserts to \`hydration\_logs\` → success haptic → sheet auto-dismisses after 600ms  
+\- Show running today total at bottom: "You've logged Xoz today"
+
+\*\*Log insert function (shared):\*\*  
+\`\`\`ts  
+async function insertProteinLog(grams: number, mealId?: string) {  
+  await supabase.from('protein\_logs').insert({  
+    user\_id: user.id,  
+    amount\_g: grams,  
+    meal\_id: mealId || null,  
+    logged\_at: new Date().toISOString(),  
+  })  
+  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)  
+  onLogged() // triggers refresh in parent  
+}  
+\`\`\`
+
+\*\*Acceptance Criteria\*\*  
+\- FAB on TodayScreen opens sheet on Protein tab  
+\- "Log Protein Now" button on TrainScreen opens sheet on Protein tab  
+\- Logging any item immediately updates the protein bar on TodayScreen (via \`onLogged\` callback)  
+\- Hydration tab auto-dismisses after 600ms  
+\- Protein tab stays open so user can log multiple items in sequence  
+\- Sheet is dismissible via X button and swipe-down gesture
+
+\*\*Notes\*\*  
+\- \`expo-haptics\` is already in \`package.json\`. Import: \`import \* as Haptics from 'expo-haptics'\`  
+\- The \`onLogged\` callback should trigger a \`loadData()\` re-fetch in TodayScreen, not a full component remount. Pass the function as a prop through to the sheet.  
+\- Do not use a third-party bottom sheet library for V1. The native \`Modal\` with \`pageSheet\` is sufficient and avoids dependency complexity.
+
+\---
+
+**\#\# Phase 4 — Wire All Dead Handlers**
+
+\> Do this as a single sweep after Phase 3 is complete. Do not wire handlers to stubs that don't exist yet.
+
+\---
+
+**\#\#\# Task 4.1 — TodayScreen dead handlers**
+
+\*\*FAB \`+\` button:\*\*  
+\`\`\`tsx  
+const \[logSheetVisible, setLogSheetVisible\] \= useState(false)
+
+// In JSX:  
+\<TouchableOpacity style={styles.fab} onPress={() \=\> setLogSheetVisible(true)}\>  
+  \+
+
+\<LogBottomSheet  
+  visible={logSheetVisible}  
+  onDismiss={() \=\> setLogSheetVisible(false)}  
+  onLogged={loadData}  
+/\>  
+\`\`\`
+
+\*\*"I Ate This" button:\*\*    
+Extract the current "Next Meal" card's protein value and log it directly without opening the sheet:  
+\`\`\`tsx  
+onPress={() \=\> insertProteinLog(nextMeal.protein\_g, nextMeal.id)}  
+\`\`\`
+
+\*\*"Not feeling this" button:\*\*    
+Open the Meals screen with a "swap mode" flag. For V1, navigate to Meals tab:  
+\`\`\`tsx  
+onPress={() \=\> navigation.navigate('Main', { screen: 'Meals' })}  
+\`\`\`  
+Full swap logic (updating \`meal\_selections\`) is a separate task — do not block on it here.
+
+\*\*Workout card:\*\*  
+\`\`\`tsx  
+onPress={() \=\> navigation.navigate('Main', { screen: 'Train' })}  
+\`\`\`
+
+\*\*Next Meal data — fix the hardcoded stub:\*\*    
+Load the next unlogged meal for today from \`meal\_selections\`. If none, show a fallback card: "No meal selected — browse the library" with a button navigating to Meals tab.
+
+\*\*Hydration target — fix hardcode:\*\*    
+Replace \`64\` with \`profile?.hydration\_target\_oz || 64\`. The default is 64oz but this allows physician-set targets.
+
+**\#\#\# Task 4.2 — TodayScreen fuel status calculation fix**
+
+Replace the broken calculation:
+
+\`\`\`ts  
+// BROKEN — always sets lastLog to right now  
+const lastLog \= proteinLogs && proteinLogs.length \> 0 ? new Date() : null;
+
+// FIX — use actual logged\_at from most recent entry  
+// Note: query must be ordered by logged\_at descending  
+const { data: proteinLogs } \= await supabase  
+  .from('protein\_logs')  
+  .select('amount\_g, logged\_at')  
+  .eq('user\_id', user\!.id)  
+  .gte('logged\_at', today)  
+  .order('logged\_at', { ascending: false })  // ← add this
+
+const lastLog \= proteinLogs && proteinLogs.length \> 0   
+  ? new Date(proteinLogs\[0\].logged\_at)   
+  : null  
+\`\`\`
+
+**\#\#\# Task 4.3 — TrainScreen dead handlers**
+
+\*\*Fix premature workout logging:\*\*    
+Remove the \`workout\_logs\` insert from \`loadData()\`. It should not fire on screen view.
+
+Create a separate \`handleCompleteWorkout\` function:  
+\`\`\`ts  
+async function handleCompleteWorkout() {  
+  await supabase.from('workout\_logs').update({  
+    status: 'completed',  
+    completed\_at: new Date().toISOString(),  
+  })  
+  .eq('user\_id', user\!.id)  
+  .eq('scheduled\_for', today)
+
+  // Brief success state then navigate away  
+  setWorkoutComplete(true)  
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)  
+  setTimeout(() \=\> navigation.navigate('Main', { screen: 'Today' }), 1200)  
+}  
+\`\`\`
+
+Add a \`workoutComplete\` boolean state. When true, show a success card ("Workout logged. Nice work.") instead of the exercise list.
+
+Log the workout as \`scheduled\` once — on the first load of the day, not on every screen visit:  
+\`\`\`ts  
+// Only insert if no log exists for today yet  
+const { data: existing } \= await supabase  
+  .from('workout\_logs')  
+  .select('id')  
+  .eq('user\_id', user\!.id)  
+  .eq('scheduled\_for', today)  
+  .single()
+
+if (\!existing) {  
+  await supabase.from('workout\_logs').insert({ ... })  
+}  
+\`\`\`
+
+\*\*"Log Protein Now" button:\*\*  
+\`\`\`tsx  
+onPress={() \=\> setLogSheetVisible(true)}  
+\`\`\`  
+Add \`LogBottomSheet\` to TrainScreen with \`defaultTab="protein"\`.
+
+\*\*"Reschedule Workout" button:\*\*    
+For V1, show a simple \`Alert\` with two options: "Tomorrow" and "Day after tomorrow". Write the new date to the existing workout\_log row. Do not build a full calendar picker.
+
+\---
+
+**\#\# Phase 5 — GroceryScreen**
+
+\---
+
+**\#\#\# Task 5.1 — \`mobile/src/screens/GroceryScreen.tsx\`**
+
+\*\*Spec\*\*
+
+Derives a grocery list from the current week's meal selections.
+
+\*\*Load sequence:\*\*  
+1\. Get week start date (Monday):   
+\`\`\`ts  
+function getWeekStart(): string {  
+  const d \= new Date()  
+  const day \= d.getDay()  
+  const diff \= d.getDate() \- day \+ (day \=== 0 ? \-6 : 1)  
+  d.setDate(diff)  
+  return d.toISOString().split('T')\[0\]  
+}  
+\`\`\`  
+2\. Query \`meal\_selections\` for \`week\_start \= getWeekStart()\` and \`user\_id \= user.id\`  
+3\. Map selected meal IDs to meal objects from \`meals.json\`  
+4\. Aggregate ingredients: for each meal, add each ingredient's quantity to a running total keyed by \`name\`  
+5\. Group by \`grocery\_category\`
+
+\*\*Display:\*\*  
+\- Section headers for each category: Proteins, Produce, Dairy & Eggs, Pantry, Other  
+\- Each item row: ingredient name (left), quantity \+ unit (right), checkbox (far right)  
+\- Checked items: strikethrough text, muted color — they move to the bottom of their section  
+\- Checkbox state is local only (AsyncStorage, keyed by \`${userId}\_${weekStart}\_grocery\`). It does not write to DB.
+
+\*\*Header row:\*\*  
+\- Title: "This Week's Groceries"  
+\- Subtitle: "Based on your X selected meals" (count of selected meals)  
+\- "Refresh" icon button (recalculates from current selections)
+
+\*\*Empty state (no meal selections):\*\*  
+\- Illustration placeholder (a simple icon is fine, no custom art)  
+\- Text: "Select your meals first"  
+\- Button: "Browse Meals" → navigates to Meals tab
+
+\*\*Acceptance Criteria\*\*  
+\- Screen renders without errors (resolves the runtime crash from missing import)  
+\- Correctly aggregates ingredients from selected meals  
+\- Checked state persists across navigation (not across weeks)  
+\- Empty state shows when no meals are selected
+
+\*\*Notes\*\*  
+\- The checkbox state intentionally resets each Monday when \`weekStart\` changes. This is correct behavior.  
+\- Do not try to smart-merge duplicate ingredients with different units (e.g. "chicken 4oz" and "chicken 3oz" → "chicken 7oz"). Simply list both. Merging units is a later enhancement.
+
+\---
+
+**\#\# Phase 6 — SettingsScreen**
+
+\---
+
+**\#\#\# Task 6.1 — \`mobile/src/screens/SettingsScreen.tsx\`**
+
+\*\*Spec\*\*
+
+Four sections, each separated by a section header label.
+
+\*\*Profile section:\*\*  
+\- Editable field: First name (text input, pre-filled from profile)  
+\- Editable field: Body weight (numeric, pre-filled, triggers protein target recalculation preview)  
+\- Read-only display: Protein target Xg/day (updates live as weight changes, with "(auto-calculated)" label)  
+\- "Save Changes" button — upserts to profiles table  
+\- On save: show brief inline success text "Saved" for 1.5 seconds
+
+\*\*Notifications section:\*\*  
+\- Toggle: "Meal reminders" (on/off)  
+\- Toggle: "Hydration nudges" (on/off)  
+\- Time picker: "First reminder" (time, shown only when meal reminders is on)  
+\- Saves on toggle change, not on a Save button
+
+\*\*Subscription section:\*\*  
+\- Display current plan: "GLP-1 Companion — $X/mo" (read from Stripe subscription status, or show "Free Trial" if no subscription)  
+\- Button: "Manage Billing" → calls \`create-checkout-session\` edge function for customer portal, opens result URL via \`expo-web-browser\`  
+\- This button should be disabled (grayed out) until Stripe integration is complete (Phase 8). Leave a \`// TODO: Stripe\` comment.
+
+\*\*Account section:\*\*  
+\- Button: "Sign Out" → \`supabase.auth.signOut()\` → navigator handles redirect automatically  
+\- Style as a muted destructive button (text: \`\#ef4444\`, no fill)
+
+\*\*Acceptance Criteria\*\*  
+\- Profile edits persist after navigating away and returning  
+\- Sign out returns user to AuthScreen  
+\- Notifications section toggles write immediately
+
+\---
+
+**\#\# Phase 7 — Clinic Dashboard Completions**
+
+\---
+
+**\#\#\# Task 7.1 — Wire PatientDetail stat cards**
+
+\*\*Spec\*\*
+
+The four KPI cards currently display \`'—'\`. Wire them to actual computed values.
+
+The data is already fetched in \`loadPatient()\`. Add a computation step after the DB calls complete:
+
+\`\`\`ts  
+// After fetching proteinLogs, nudgeEvents, workoutLogs for the period:
+
+const daysInPeriod \= 30 // or 7 for week view  
+const allDates \= Array.from({ length: daysInPeriod }, (\_, i) \=\> {  
+  const d \= new Date()  
+  d.setDate(d.getDate() \- (daysInPeriod \- 1 \- i))  
+  return d.toISOString().split('T')\[0\]  
+})
+
+// Protein: avg daily grams / target. Zero for days with no logs.  
+const dailyProtein: Record \= {}  
+for (const log of proteinLogs || \[\]) {  
+  const day \= log.logged\_at.split('T')\[0\]  
+  dailyProtein\[day\] \= (dailyProtein\[day\] || 0) \+ log.amount\_g  
+}  
+const proteinAdherence \= allDates.reduce((sum, day) \=\> {  
+  const pct \= dailyProtein\[day\] ? (dailyProtein\[day\] / profile.protein\_target\_g) \* 100 : 0  
+  return sum \+ pct  
+}, 0) / daysInPeriod
+
+// Nudge response rate  
+const totalNudges \= nudgeLog.length  
+const respondedNudges \= nudgeLog.filter(n \=\> n.action\_taken && n.action\_taken \!== 'no\_action').length  
+const nudgeResponseRate \= totalNudges \> 0 ? (respondedNudges / totalNudges) \* 100 : 100
+
+// Workout completion (load separately if not already loaded)  
+const completedWorkouts \= workoutLogs.filter(w \=\> w.status \=== 'completed').length  
+const scheduledWorkouts \= workoutLogs.filter(w \=\> w.status \!== 'skipped\_underfueled').length  
+const workoutCompletion \= scheduledWorkouts \> 0 ? (completedWorkouts / scheduledWorkouts) \* 100 : 0
+
+setStats({ proteinAdherence, nudgeResponseRate, workoutCompletion })  
+\`\`\`
+
+Map to card display:  
+\`\`\`tsx  
+{ label: 'Protein Adherence', value: \`${Math.round(stats.proteinAdherence)}%\` }  
+{ label: 'Nudge Response Rate', value: \`${Math.round(stats.nudgeResponseRate)}%\` }  
+{ label: 'Workout Completion', value: \`${Math.round(stats.workoutCompletion)}%\` }  
+{ label: 'Days Active', value: Object.keys(dailyProtein).length.toString() }  
+\`\`\`
+
+Replace the hardcoded hydration stat with "Days Active" for now — hydration data requires fetching \`hydration\_logs\` separately which is a follow-on.
+
+\*\*Add a period toggle (week/month):\*\*  
+Add \`period: '7d' | '30d'\` state, defaulting to \`'30d'\`. Two tab buttons above the stat grid. When period changes, recalculate \`thirtyDaysAgo\` (or \`sevenDaysAgo\`) and re-fetch.
+
+\*\*Acceptance Criteria\*\*  
+\- All four stat cards show real numbers, not \`'—'\`  
+\- Week/month toggle changes the values  
+\- Zero-day rule is enforced: days with no protein logs count as 0%, not skipped
+
+\---
+
+**\#\#\# Task 7.2 — \`clinic-dashboard/src/pages/ClinicSettings.tsx\`**
+
+\*\*Spec\*\*
+
+Three sections:
+
+\*\*Clinic info:\*\*  
+\- Display: clinic name, address (read-only, from \`clinicUser.clinics\`)  
+\- No edit capability for V1 — data comes from the onboarding/setup process
+
+\*\*Patient invite:\*\*  
+\- Display the referral code prominently: large monospace font, pill badge style  
+\- "Copy code" button → \`navigator.clipboard.writeText(referralCode)\`  
+\- "Copy invite link" button → copies \`https://app.chassis.health/join?code=${referralCode}\`    
+  (Use whatever your actual domain will be — use a placeholder for now)  
+\- Patient count: "X active patients" (count of profiles where \`clinic\_id \= clinicUser.clinic\_id\`)
+
+\*\*Billing:\*\*  
+\- Display plan name and current period (read from Stripe, stub with hardcoded "Active" for V1)  
+\- "Manage billing" button — placeholder for Stripe customer portal (Phase 8\)
+
+\*\*Acceptance Criteria\*\*  
+\- Route \`/settings\` renders without errors  
+\- Referral code is displayed and copyable  
+\- Patient count is accurate
+
+\---
+
+**\#\#\# Task 7.3 — PatientPanel performance fix**
+
+\*\*Spec\*\*
+
+The current implementation runs 3 Supabase queries per patient (N+1). Replace with a single call to the \`clinic-patient-summary\` RPC that was added in the post-audit fix pass.
+
+\`\`\`ts  
+async function loadPatients() {  
+  const { data, error } \= await supabase  
+    .rpc('get\_clinic\_patient\_summary', { clinic\_id\_param: clinicUser.clinic\_id })
+
+  if (error) {  
+    console.error(error)  
+    return  
+  }
+
+  setPatients(data || \[\])  
+  setLoading(false)  
+}  
+\`\`\`
+
+The RPC should return pre-computed fields: \`protein\_pct\`, \`response\_rate\`, \`completed\_workouts\`, \`status\`, \`last\_seen\_at\`. If the RPC does not yet exist in the schema, flag it to the backend developer — do not re-implement the N+1 in the meantime.
+
+\*\*Add search \+ filter:\*\*  
+\- Text input at top of the patient table: searches on \`first\_name\`  
+\- Status filter buttons: "All" | "Needs Attention" | "Non-Compliant" (matches the badge values)  
+\- Implement as client-side filter on the already-loaded \`patients\` array — no additional DB queries
+
+\`\`\`ts  
+const filteredPatients \= patients.filter(p \=\> {  
+  const matchesSearch \= \!search || p.first\_name?.toLowerCase().includes(search.toLowerCase())  
+  const matchesStatus \= statusFilter \=== 'All' || p.status \=== statusFilter  
+  return matchesSearch && matchesStatus  
+})  
+\`\`\`
+
+\*\*Acceptance Criteria\*\*  
+\- Page load time reduces from N+1 to a single query  
+\- Search filters the table in real time  
+\- Status filter shows only patients in the selected category
+
+\---
+
+**\#\# Phase 8 — Stripe Integration**
+
+\> Only start this after Phases 1–7 are complete and tested. Stripe touches auth, webhooks, and subscription state across the entire app.
+
+\---
+
+**\#\#\# Task 8.1 — \`create-checkout-session\` Edge Function**
+
+\*\*Spec\*\*
+
+This function handles two modes based on the request body:
+
+1\. \*\*New subscription:\*\* Create a Stripe Checkout Session for new patients subscribing  
+2\. \*\*Customer portal:\*\* Return a Stripe Billing Portal URL for existing subscribers to manage their plan
+
+\`\`\`ts  
+// In the edge function:  
+const { mode, userId } \= await req.json()
+
+if (mode \=== 'portal') {  
+  // Get customer\_id from profiles table  
+  const { data: profile } \= await supabase.from('profiles').select('stripe\_customer\_id').eq('id', userId).single()  
+  const session \= await stripe.billingPortal.sessions.create({  
+    customer: profile.stripe\_customer\_id,  
+    return\_url: 'https://app.chassis.health/settings', // your actual URL  
+  })  
+  return new Response(JSON.stringify({ url: session.url }))  
+}
+
+if (mode \=== 'checkout') {  
+  // Create checkout session  
+  const session \= await stripe.checkout.sessions.create({  
+    mode: 'subscription',  
+    customer\_email: userEmail,  
+    line\_items: \[{ price: STRIPE\_PRICE\_ID, quantity: 1 }\],  
+    success\_url: 'https://app.chassis.health/success',  
+    cancel\_url: 'https://app.chassis.health/settings',  
+    metadata: { user\_id: userId },  
+  })  
+  return new Response(JSON.stringify({ url: session.url }))  
+}  
+\`\`\`
+
+On the mobile side (SettingsScreen), call the edge function and open the returned URL:  
+\`\`\`ts  
+const { data } \= await supabase.functions.invoke('create-checkout-session', {  
+  body: { mode: 'portal', userId: user.id },  
+})  
+await WebBrowser.openBrowserAsync(data.url)  
+\`\`\`
+
+**\#\#\# Task 8.2 — \`stripe-webhook\` Edge Function**
+
+\*\*Spec\*\*
+
+Handles subscription lifecycle events. The critical ones to implement:
+
+\- \`checkout.session.completed\` → write \`stripe\_customer\_id\` and \`stripe\_subscription\_id\` to \`profiles\`, set \`subscription\_status: 'active'\`  
+\- \`customer.subscription.deleted\` → set \`subscription\_status: 'canceled'\`  
+\- \`invoice.payment\_failed\` → set \`subscription\_status: 'past\_due'\`
+
+Webhook signature verification is mandatory — use \`stripe.webhooks.constructEvent()\` with \`STRIPE\_WEBHOOK\_SECRET\`.
+
+\*\*Acceptance Criteria\*\*  
+\- New subscriber → \`profiles.subscription\_status\` \= \`'active'\`  
+\- Canceled subscriber → \`subscription\_status\` \= \`'canceled'\`  
+\- Signature verification failure → return 400
+
+\---
+
+**\#\# Phase 9 — Analytics Events**
+
+\> Instrument after all core flows work. Do not build this before Phase 7\.
+
+\---
+
+**\#\#\# Task 9.1 — Analytics event insertions**
+
+Insert to \`analytics\_events\` table on these triggers. The schema for the table:
+
+\`\`\`sql  
+\-- Should already exist in schema.sql:  
+analytics\_events (  
+  id uuid default gen\_random\_uuid(),  
+  user\_id uuid references profiles(id),  
+  event\_name text,  
+  properties jsonb,  
+  occurred\_at timestamptz default now()  
+)  
+\`\`\`
+
+Events to instrument:
+
+|  
+**Event name**  
+|  
+**Trigger**  
+|  
+**Properties**  
+|  
+|  
+\---  
+|  
+\---  
+|  
+\---  
+|  
+|  
+\`onboarding\_completed\`  
+|  
+Step 5 commit  
+|  
+\`{ tier, clinic\_id, protein\_target\_g }\`  
+|  
+|  
+\`protein\_logged\`  
+|  
+Any protein log insert  
+|  
+\`{ grams, source: 'meals'|'quick'|'custom', meal\_id? }\`  
+|  
+|  
+\`hydration\_logged\`  
+|  
+Any hydration log insert  
+|  
+\`{ oz }\`  
+|  
+|  
+\`workout\_completed\`  
+|  
+Complete Workout button  
+|  
+\`{ day\_number, fuel\_status, duration\_min }\`  
+|  
+|  
+\`workout\_skipped\`  
+|  
+Status \= red, user navigates away  
+|  
+\`{ fuel\_status, protein\_at\_time }\`  
+|  
+|  
+\`nudge\_responded\`  
+|  
+Push notification action  
+|  
+\`{ nudge\_type, action\_taken }\`  
+|  
+|  
+\`meal\_swapped\`  
+|  
+Meal selection replaced  
+|  
+\`{ old\_meal\_id, new\_meal\_id }\`  
+|
+
+Do not build a separate analytics service. A simple helper function is sufficient:
+
+\`\`\`ts  
+async function trackEvent(name: string, properties: Record \= {}) {  
+  await supabase.from('analytics\_events').insert({  
+    user\_id: user.id,  
+    event\_name: name,  
+    properties,  
+  })  
+}  
+\`\`\`
+
+Wrap all calls in try/catch and swallow errors — analytics failures must never break the user flow.
+
+\---
+
+**\#\# Phase 10 — Production Readiness**
+
+\> Complete before any external demo or clinic pilot.
+
+\---
+
+**\#\#\# Task 10.1 — iOS/Android native configuration**
+
+\- App name: "Chassis"  
+\- Bundle ID: \`health.chassis.app\` (or whatever domain is finalized)  
+\- App icons: 1024×1024 source image, Expo EAS handles resizing  
+\- Splash screen: dark background (\`\#0f172a\`), centered wordmark  
+\- Configure in \`app.json\` (Expo managed workflow)
+
+**\#\#\# Task 10.2 — Deep linking**
+
+Configure deep link scheme \`chassis://\` for push notification deep links.
+
+Required routes:  
+\- \`chassis://log\` → opens app to TodayScreen with LogBottomSheet pre-open  
+\- \`chassis://train\` → opens app to TrainScreen  
+\- \`chassis://join?code=XXXXX\` → opens app to OnboardingScreen step 3 with code pre-filled
+
+Add to \`app.json\`:  
+\`\`\`json  
+{  
+  "expo": {  
+    "scheme": "chassis",  
+    "android": { "intentFilters": \[...\] }  
+  }  
+}  
+\`\`\`
+
+Handle in \`AppNavigator.tsx\` via \`Linking.addEventListener\`.
+
+**\#\#\# Task 10.3 — Error boundaries**
+
+Wrap the clinic dashboard \`App.tsx\` in a React error boundary that shows a minimal error UI instead of a blank screen on crashes. A functional class component boundary is sufficient for V1 — no library needed.
+
+**\#\#\# Task 10.4 — Video playback (deferred)**
+
+\`workouts.json\` has a \`video\_url\` field in the spec. When that field is populated, \`TrainScreen\` exercise cards should show a play button that opens a video player via \`expo-av\`. This task is blocked on video content existing — implement the player wrapper but keep it hidden behind a \`video\_url ? \<VideoPlayer\> : null\` conditional. Do not build placeholder UI.
+
+\---
+
+**\#\# Appendix — Known deferred items (out of scope for this build)**
+
+These are explicitly not part of this specification and should not be started without a separate spec:
+
+\- Social auth (Apple, Google) for mobile — Email-only is sufficient for pilot  
+\- Meal swap logic (updating \`meal\_selections\` record) — Navigate to Meals tab for V1  
+\- Physician report PDF content design — The edge function exists; content spec is a separate deliverable  
+\- Multi-clinician access per clinic — Single clinic user per account for V1  
+\- Patient messaging / in-app chat  
+\- Nutrition label scanning (camera integration)
+
+\---
+
+**\#\# Definition of Done (per phase)**
+
+A phase is not done when code is written. A phase is done when:
+
+1\. The feature works end-to-end on a real device (not just simulator)  
+2\. No \`console.error\` output during normal use  
+3\. The error state is handled (network failure, empty data, permission denied)  
+4\. The happy path and one failure path are manually tested
+
+Do not submit a phase for review until you can demonstrate the end-to-end flow on device.
+
+# Meals and Workouts
+
+import os
+
+base\_dir \= "/mnt/agents/output/chassis"
+
+\# Define all files and their content  
+files \= {}
+
+\# 1\. Shared data files  
+files\[f"{base\_dir}/shared/meals.json"\] \= json.dumps(\[  
+    {"id": 1, "name": "Greek Yogurt Parfait", "protein\_g": 23, "calories": 320, "prep\_time\_min": 5, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 2, "name": "Protein Smoothie", "protein\_g": 30, "calories": 280, "prep\_time\_min": 3, "texture": \["liquid"\], "meal\_types": \["breakfast", "snack"\]},  
+    {"id": 3, "name": "Grilled Chicken Salad", "protein\_g": 42, "calories": 450, "prep\_time\_min": 15, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 4, "name": "Egg White Scramble", "protein\_g": 20, "calories": 220, "prep\_time\_min": 10, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 5, "name": "Salmon & Asparagus", "protein\_g": 38, "calories": 420, "prep\_time\_min": 20, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 6, "name": "Cottage Cheese Bowl", "protein\_g": 25, "calories": 240, "prep\_time\_min": 3, "texture": \["soft"\], "meal\_types": \["snack", "breakfast"\]},  
+    {"id": 7, "name": "Turkey Lettuce Wraps", "protein\_g": 28, "calories": 310, "prep\_time\_min": 12, "texture": \["standard"\], "meal\_types": \["lunch"\]},  
+    {"id": 8, "name": "Bone Broth Soup", "protein\_g": 15, "calories": 120, "prep\_time\_min": 5, "texture": \["liquid"\], "meal\_types": \["snack", "dinner"\]},  
+    {"id": 9, "name": "Tofu Stir-Fry", "protein\_g": 22, "calories": 350, "prep\_time\_min": 18, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 10, "name": "Protein Oatmeal", "protein\_g": 18, "calories": 290, "prep\_time\_min": 8, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 11, "name": "Tuna Poke Bowl", "protein\_g": 35, "calories": 480, "prep\_time\_min": 15, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 12, "name": "Protein Shake", "protein\_g": 27, "calories": 180, "prep\_time\_min": 2, "texture": \["liquid"\], "meal\_types": \["snack"\]},  
+    {"id": 13, "name": "Chicken & Rice", "protein\_g": 40, "calories": 520, "prep\_time\_min": 25, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 14, "name": "Egg Bites", "protein\_g": 16, "calories": 200, "prep\_time\_min": 20, "texture": \["soft"\], "meal\_types": \["breakfast", "snack"\]},  
+    {"id": 15, "name": "Shrimp Zoodles", "protein\_g": 30, "calories": 280, "prep\_time\_min": 15, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 16, "name": "Overnight Oats", "protein\_g": 19, "calories": 310, "prep\_time\_min": 5, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 17, "name": "Beef & Broccoli", "protein\_g": 36, "calories": 440, "prep\_time\_min": 22, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 18, "name": "Chia Pudding", "protein\_g": 12, "calories": 210, "prep\_time\_min": 5, "texture": \["soft"\], "meal\_types": \["snack", "breakfast"\]},  
+    {"id": 19, "name": "Lentil Soup", "protein\_g": 18, "calories": 260, "prep\_time\_min": 30, "texture": \["liquid", "soft"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 20, "name": "Protein Pancakes", "protein\_g": 24, "calories": 340, "prep\_time\_min": 15, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 21, "name": "Miso Soup with Tofu", "protein\_g": 14, "calories": 140, "prep\_time\_min": 10, "texture": \["liquid"\], "meal\_types": \["snack", "dinner"\]},  
+    {"id": 22, "name": "Steak & Sweet Potato", "protein\_g": 45, "calories": 560, "prep\_time\_min": 25, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 23, "name": "Greek Yogurt Smoothie", "protein\_g": 22, "calories": 250, "prep\_time\_min": 3, "texture": \["liquid"\], "meal\_types": \["breakfast", "snack"\]},  
+    {"id": 24, "name": "Chicken Soup", "protein\_g": 28, "calories": 310, "prep\_time\_min": 35, "texture": \["liquid", "soft"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 25, "name": "Edamame Hummus Plate", "protein\_g": 16, "calories": 240, "prep\_time\_min": 8, "texture": \["soft"\], "meal\_types": \["snack"\]},  
+    {"id": 26, "name": "Pork Tenderloin", "protein\_g": 38, "calories": 420, "prep\_time\_min": 25, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 27, "name": "Protein Hot Chocolate", "protein\_g": 15, "calories": 160, "prep\_time\_min": 5, "texture": \["liquid"\], "meal\_types": \["snack"\]},  
+    {"id": 28, "name": "Quinoa Buddha Bowl", "protein\_g": 20, "calories": 380, "prep\_time\_min": 18, "texture": \["standard"\], "meal\_types": \["lunch"\]},  
+    {"id": 29, "name": "Scrambled Eggs & Avocado", "protein\_g": 18, "calories": 290, "prep\_time\_min": 8, "texture": \["soft"\], "meal\_types": \["breakfast"\]},  
+    {"id": 30, "name": "White Fish & Greens", "protein\_g": 32, "calories": 310, "prep\_time\_min": 20, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 31, "name": "Protein Mousse", "protein\_g": 20, "calories": 180, "prep\_time\_min": 5, "texture": \["soft"\], "meal\_types": \["snack"\]},  
+    {"id": 32, "name": "Turkey Chili", "protein\_g": 30, "calories": 380, "prep\_time\_min": 35, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 33, "name": "Collagen Coffee", "protein\_g": 10, "calories": 80, "prep\_time\_min": 2, "texture": \["liquid"\], "meal\_types": \["breakfast", "snack"\]},  
+    {"id": 34, "name": "Baked Cod & Vegetables", "protein\_g": 34, "calories": 340, "prep\_time\_min": 22, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 35, "name": "Ricotta & Berries", "protein\_g": 14, "calories": 200, "prep\_time\_min": 3, "texture": \["soft"\], "meal\_types": \["breakfast", "snack"\]},  
+    {"id": 36, "name": "Chicken Lettuce Cups", "protein\_g": 26, "calories": 280, "prep\_time\_min": 15, "texture": \["standard"\], "meal\_types": \["lunch"\]},  
+    {"id": 37, "name": "Vegetable Broth", "protein\_g": 5, "calories": 60, "prep\_time\_min": 5, "texture": \["liquid"\], "meal\_types": \["snack"\]},  
+    {"id": 38, "name": "Beef Stew", "protein\_g": 35, "calories": 420, "prep\_time\_min": 45, "texture": \["standard"\], "meal\_types": \["dinner"\]},  
+    {"id": 39, "name": "Silken Tofu Pudding", "protein\_g": 12, "calories": 150, "prep\_time\_min": 5, "texture": \["soft"\], "meal\_types": \["snack"\]},  
+    {"id": 40, "name": "Grilled Shrimp Skewers", "protein\_g": 28, "calories": 260, "prep\_time\_min": 18, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]},  
+    {"id": 41, "name": "Egg Drop Soup", "protein\_g": 12, "calories": 130, "prep\_time\_min": 10, "texture": \["liquid"\], "meal\_types": \["snack", "dinner"\]},  
+    {"id": 42, "name": "Bison Burger Bowl", "protein\_g": 40, "calories": 480, "prep\_time\_min": 20, "texture": \["standard"\], "meal\_types": \["lunch", "dinner"\]}  
+\], indent=2)
+
+files\[f"{base\_dir}/shared/workouts.json"\] \= json.dumps({  
+    "glp1": {  
+        "day1": {  
+            "name": "Full Body Strength A",  
+            "duration\_min": 30,  
+            "exercises": \[  
+                {"name": "Goblet Squats", "sets": 3, "reps": "10-12", "cue": "Chest up, sit back", "band\_mod": "Light band above knees"},  
+                {"name": "Push-Ups (Incline)", "sets": 3, "reps": "8-12", "cue": "Body in straight line"},  
+                {"name": "Single-Leg RDL", "sets": 3, "reps": "10 each", "cue": "Hinge at hips, soft knee"},  
+                {"name": "Bent Over Row", "sets": 3, "reps": "10-12", "cue": "Squeeze shoulder blades"},  
+                {"name": "Plank", "sets": 3, "reps": "30-45 sec", "cue": "Brace core, breathe"}  
+            \]  
+        },  
+        "day2": {  
+            "name": "Cardio & Core",  
+            "duration\_min": 25,  
+            "exercises": \[  
+                {"name": "Brisk Walk / Incline Treadmill", "sets": 1, "reps": "15 min", "cue": "Conversational pace"},  
+                {"name": "Dead Bug", "sets": 3, "reps": "10 each side", "cue": "Lower back pressed to floor"},  
+                {"name": "Bird Dog", "sets": 3, "reps": "10 each side", "cue": "Slow and controlled"},  
+                {"name": "Glute Bridge", "sets": 3, "reps": "15", "cue": "Squeeze glutes at top"},  
+                {"name": "Side Plank", "sets": 2, "reps": "20 sec each", "cue": "Hips stacked"}  
+            \]  
+        },  
+        "day3": {  
+            "name": "Full Body Strength B",  
+            "duration\_min": 30,  
+            "exercises": \[  
+                {"name": "Romanian Deadlift", "sets": 3, "reps": "10-12", "cue": "Hips back, flat back"},  
+                {"name": "Overhead Press", "sets": 3, "reps": "10-12", "cue": "Core tight, no arch"},  
+                {"name": "Split Squat", "sets": 3, "reps": "10 each", "cue": "Torso upright"},  
+                {"name": "Lat Pulldown", "sets": 3, "reps": "10-12", "cue": "Pull to chest, control negative"},  
+                {"name": "Farmer Carry", "sets": 3, "reps": "30 sec", "cue": "Shoulders down, walk tall"}  
+            \]  
+        }  
+    },  
+    "longevity": {  
+        "day1": {  
+            "name": "Zone 2 \+ Mobility",  
+            "duration\_min": 40,  
+            "exercises": \[  
+                {"name": "Zone 2 Cycling / Walking", "sets": 1, "reps": "30 min", "cue": "Nose breathing only"},  
+                {"name": "World's Greatest Stretch", "sets": 2, "reps": "5 each side", "cue": "Breathe into stretch"},  
+                {"name": "90/90 Hip Switch", "sets": 2, "reps": "10 each side", "cue": "Keep heels down"},  
+                {"name": "Thoracic Bridge", "sets": 2, "reps": "5", "cue": "Open chest to ceiling"}  
+            \]  
+        },  
+        "day2": {  
+            "name": "Strength & Stability",  
+            "duration\_min": 35,  
+            "exercises": \[  
+                {"name": "Trap Bar Deadlift", "sets": 3, "reps": "5", "cue": "Push floor away"},  
+                {"name": "Half-Kneeling Landmine Press", "sets": 3, "reps": "8 each", "cue": "Press at 45° angle"},  
+                {"name": "Cable Pull-Through", "sets": 3, "reps": "12", "cue": "Hips back, squeeze glutes"},  
+                {"name": "Pallof Press", "sets": 3, "reps": "10 each side", "cue": "Resist rotation"},  
+                {"name": "Turkish Get-Up (Light)", "sets": 2, "reps": "3 each side", "cue": "Slow and deliberate"}  
+            \]  
+        },  
+        "day3": {  
+            "name": "VO2 Max Intervals",  
+            "duration\_min": 30,  
+            "exercises": \[  
+                {"name": "Warm-Up", "sets": 1, "reps": "5 min easy", "cue": "Gradually increase pace"},  
+                {"name": "Interval Sprints", "sets": 6, "reps": "1 min hard / 2 min easy", "cue": "All out effort"},  
+                {"name": "Cool Down", "sets": 1, "reps": "5 min walk", "cue": "Bring heart rate down"},  
+                {"name": "Couch Stretch", "sets": 2, "reps": "90 sec each", "cue": "Squeeze glute, push hips forward"}  
+            \]  
+        }  
+    }  
+}, indent=2)
+
+print("Shared data files prepared.")  
+print(f"Total files to write: {len(files)}")
+
+# Supabase
+
+import os  
+import json
+
+\# Create base directory structure  
+base\_dir \= "/mnt/agents/output/chassis"  
+dirs \= \[  
+    f"{base\_dir}/mobile/src/lib",  
+    f"{base\_dir}/mobile/src/hooks",  
+    f"{base\_dir}/mobile/src/navigation",  
+    f"{base\_dir}/mobile/src/screens",  
+    f"{base\_dir}/mobile/src/data",  
+    f"{base\_dir}/clinic-dashboard/src/lib",  
+    f"{base\_dir}/clinic-dashboard/src/pages",  
+    f"{base\_dir}/shared",  
+    f"{base\_dir}/supabase/edge-functions/nudge-dispatcher",  
+    f"{base\_dir}/supabase/edge-functions/generate-physician-report",  
+    f"{base\_dir}/supabase/edge-functions/stripe-webhook",  
+    f"{base\_dir}/supabase/edge-functions/create-checkout-session",  
+\]
+
+for d in dirs:  
+    os.makedirs(d, exist\_ok=True)
+
+print("Directory structure created.")
+
+# Mobile and clinic source files
+
+\# Write all mobile and clinic source files
+
+mobile\_supabase\_ts \= """import 'react-native-url-polyfill/auto';  
+import AsyncStorage from '@react-native-async-storage/async-storage';  
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl \= process.env.EXPO\_PUBLIC\_SUPABASE\_URL || 'https://your-project.supabase.co';  
+const supabaseAnonKey \= process.env.EXPO\_PUBLIC\_SUPABASE\_ANON\_KEY || 'your-anon-key';
+
+export const supabase \= createClient(supabaseUrl, supabaseAnonKey, {  
+  auth: {  
+    storage: AsyncStorage,  
+    autoRefreshToken: true,  
+    persistSession: true,  
+    detectSessionInUrl: false,  
+  },  
+});  
+"""
+
+mobile\_hooks\_useAuth\_tsx \= """import React, { createContext, useContext, useEffect, useState } from 'react';  
+import { supabase } from '../lib/supabase';
+
+interface AuthContextType {  
+  session: any;  
+  user: any;  
+  loading: boolean;  
+  signIn: (email: string, password: string) \=\> Promise\<void\>;  
+  signUp: (email: string, password: string) \=\> Promise\<void\>;  
+  signOut: () \=\> Promise\<void\>;  
+}
+
+const AuthContext \= createContext\<AuthContextType | undefined\>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {  
+  const \[session, setSession\] \= useState\<any\>(null);  
+  const \[user, setUser\] \= useState\<any\>(null);  
+  const \[loading, setLoading\] \= useState(true);
+
+  useEffect(() \=\> {  
+    supabase.auth.getSession().then(({ data: { session } }) \=\> {  
+      setSession(session);  
+      setUser(session?.user ?? null);  
+      setLoading(false);  
+    });
+
+    const { data: listener } \= supabase.auth.onAuthStateChange((\_event, session) \=\> {  
+      setSession(session);  
+      setUser(session?.user ?? null);  
+      setLoading(false);  
+    });
+
+    return () \=\> listener.subscription.unsubscribe();  
+  }, \[\]);
+
+  const signIn \= async (email: string, password: string) \=\> {  
+    const { error } \= await supabase.auth.signInWithPassword({ email, password });  
+    if (error) throw error;  
+  };
+
+  const signUp \= async (email: string, password: string) \=\> {  
+    const { error } \= await supabase.auth.signUp({ email, password });  
+    if (error) throw error;  
+  };
+
+  const signOut \= async () \=\> {  
+    await supabase.auth.signOut();  
+  };
+
+  return (  
+    \<AuthContext.Provider value={{ session, user, loading, signIn, signUp, signOut }}\>  
+      {children}  
+    \</AuthContext.Provider\>  
+  );  
+}
+
+export function useAuth() {  
+  const context \= useContext(AuthContext);  
+  if (\!context) throw new Error('useAuth must be used within AuthProvider');  
+  return context;  
+}  
+"""
+
+mobile\_hooks\_usePushNotifications\_ts \= """import { useEffect } from 'react';  
+import { Platform } from 'react-native';  
+import \* as Device from 'expo-device';  
+import \* as Notifications from 'expo-notifications';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from './useAuth';
+
+Notifications.setNotificationHandler({  
+  handleNotification: async () \=\> ({  
+    shouldShowAlert: true,  
+    shouldPlaySound: false,  
+    shouldSetBadge: false,  
+  }),  
+});
+
+export function usePushNotifications() {  
+  const { user } \= useAuth();
+
+  useEffect(() \=\> {  
+    if (\!user) return;  
+    registerPushToken(user.id);  
+  }, \[user\]);  
+}
+
+async function registerPushToken(userId: string) {  
+  if (\!Device.isDevice) return;
+
+  const { status: existingStatus } \= await Notifications.getPermissionsAsync();  
+  let finalStatus \= existingStatus;
+
+  if (existingStatus \!== 'granted') {  
+    const { status } \= await Notifications.requestPermissionsAsync();  
+    finalStatus \= status;  
+  }
+
+  if (finalStatus \!== 'granted') return;
+
+  const tokenData \= await Notifications.getExpoPushTokenAsync();  
+  const token \= tokenData.data;
+
+  await supabase.from('push\_tokens').upsert({  
+    user\_id: userId,  
+    token,  
+    platform: Platform.OS,  
+  }, { onConflict: 'user\_id' });  
+}  
+"""
+
+mobile\_navigation\_AppNavigator\_tsx \= """import React from 'react';  
+import { NavigationContainer } from '@react-navigation/native';  
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';  
+import { createNativeStackNavigator } from '@react-navigation/native-stack';  
+import { Ionicons } from '@expo/vector-icons';  
+import { useAuth } from '../hooks/useAuth';  
+import { usePushNotifications } from '../hooks/usePushNotifications';
+
+import TodayScreen from '../screens/TodayScreen';  
+import MealsScreen from '../screens/MealsScreen';  
+import GroceryScreen from '../screens/GroceryScreen';  
+import TrainScreen from '../screens/TrainScreen';  
+import SettingsScreen from '../screens/SettingsScreen';  
+import OnboardingScreen from '../screens/OnboardingScreen';  
+import AuthScreen from '../screens/AuthScreen';
+
+const Tab \= createBottomTabNavigator();  
+const Stack \= createNativeStackNavigator();
+
+function MainTabs() {  
+  return (  
+    \<Tab.Navigator  
+      screenOptions={({ route }) \=\> ({  
+        tabBarActiveTintColor: '\#0ea5e9',  
+        tabBarInactiveTintColor: '\#64748b',  
+        tabBarStyle: { backgroundColor: '\#0f172a', borderTopColor: '\#1e293b' },  
+        headerStyle: { backgroundColor: '\#0f172a' },  
+        headerTintColor: '\#f8fafc',  
+        tabBarIcon: ({ color, size }) \=\> {  
+          let iconName: any \= 'home';  
+          if (route.name \=== 'Today') iconName \= 'home';  
+          else if (route.name \=== 'Meals') iconName \= 'restaurant';  
+          else if (route.name \=== 'Grocery') iconName \= 'cart';  
+          else if (route.name \=== 'Train') iconName \= 'barbell';  
+          return \<Ionicons name={iconName} size={size} color={color} /\>;  
+        },  
+      })}  
+    \>  
+      \<Tab.Screen name="Today" component={TodayScreen} /\>  
+      \<Tab.Screen name="Meals" component={MealsScreen} /\>  
+      \<Tab.Screen name="Grocery" component={GroceryScreen} /\>  
+      \<Tab.Screen name="Train" component={TrainScreen} /\>  
+    \</Tab.Navigator\>  
+  );  
+}
+
+export default function AppNavigator() {  
+  const { session, user, loading } \= useAuth();  
+  usePushNotifications();
+
+  if (loading) return null;
+
+  return (  
+    \<NavigationContainer\>  
+      \<Stack.Navigator screenOptions={{ headerShown: false }}\>  
+        {\!session ? (  
+          \<Stack.Screen name="Auth" component={AuthScreen} /\>  
+        ) : \!user?.user\_metadata?.onboarding\_complete ? (  
+          \<Stack.Screen name="Onboarding" component={OnboardingScreen} /\>  
+        ) : (  
+          \<\>  
+            \<Stack.Screen name="Main" component={MainTabs} /\>  
+            \<Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} /\>  
+          \</\>  
+        )}  
+      \</Stack.Navigator\>  
+    \</NavigationContainer\>  
+  );  
+}  
+"""
+
+mobile\_screens\_AuthScreen\_tsx \= """import React, { useState } from 'react';  
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function AuthScreen() {  
+  const \[email, setEmail\] \= useState('');  
+  const \[password, setPassword\] \= useState('');  
+  const \[isSignUp, setIsSignUp\] \= useState(false);  
+  const { signIn, signUp } \= useAuth();
+
+  const handleSubmit \= async () \=\> {  
+    try {  
+      if (isSignUp) {  
+        await signUp(email, password);  
+        Alert.alert('Check your email', 'Confirm your email address to continue.');  
+      } else {  
+        await signIn(email, password);  
+      }  
+    } catch (err: any) {  
+      Alert.alert('Error', err.message);  
+    }  
+  };
+
+  return (  
+    \<View style={styles.container}\>  
+      \<Text style={styles.title}\>Chassis\</Text\>  
+      \<Text style={styles.subtitle}\>Built to keep GLP-1 patients eating, moving, and accountable.\</Text\>  
+      \<TextInput  
+        style={styles.input}  
+        placeholder="Email"  
+        placeholderTextColor="\#64748b"  
+        value={email}  
+        onChangeText={setEmail}  
+        autoCapitalize="none"  
+        keyboardType="email-address"  
+      /\>  
+      \<TextInput  
+        style={styles.input}  
+        placeholder="Password"  
+        placeholderTextColor="\#64748b"  
+        value={password}  
+        onChangeText={setPassword}  
+        secureTextEntry  
+      /\>  
+      \<TouchableOpacity style={styles.button} onPress={handleSubmit}\>  
+        \<Text style={styles.buttonText}\>{isSignUp ? 'Create Account' : 'Sign In'}\</Text\>  
+      \</TouchableOpacity\>  
+      \<TouchableOpacity onPress={() \=\> setIsSignUp(\!isSignUp)}\>  
+        \<Text style={styles.link}\>  
+          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}  
+        \</Text\>  
+      \</TouchableOpacity\>  
+    \</View\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center' },  
+  title: { fontSize: 36, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 8, fontFamily: 'PlayfairDisplay' },  
+  subtitle: { fontSize: 14, color: '\#94a3b8', marginBottom: 32 },  
+  input: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, color: '\#f8fafc', marginBottom: 12, fontSize: 16 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  link: { color: '\#0ea5e9', textAlign: 'center', marginTop: 20, fontSize: 14 },  
+});  
+"""
+
+mobile\_screens\_TodayScreen\_tsx \= """import React, { useEffect, useState, useCallback } from 'react';  
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+
+export default function TodayScreen() {  
+  const { user } \= useAuth();  
+  const navigation \= useNavigation();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[proteinToday, setProteinToday\] \= useState(0);  
+  const \[hydrationToday, setHydrationToday\] \= useState(0);  
+  const \[nudges, setNudges\] \= useState\<any\[\]\>(\[\]);  
+  const \[workoutStatus, setWorkoutStatus\] \= useState\<'green' | 'yellow' | 'orange' | 'red'\>('red');  
+  const \[refreshing, setRefreshing\] \= useState(false);
+
+  useFocusEffect(  
+    useCallback(() \=\> {  
+      loadData();  
+    }, \[\])  
+  );
+
+  async function loadData() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data: profileData } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    setProfile(profileData);
+
+    const { data: proteinLogs } \= await supabase.from('protein\_logs').select('amount\_g, logged\_at').eq('user\_id', user\!.id).gte('logged\_at', today);  
+    const proteinSum \= (proteinLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_g, 0);  
+    setProteinToday(proteinSum);
+
+    const { data: hydrationLogs } \= await supabase.from('hydration\_logs').select('amount\_oz').eq('user\_id', user\!.id).gte('logged\_at', today);  
+    const hydrationSum \= (hydrationLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_oz, 0);  
+    setHydrationToday(hydrationSum);
+
+    const { data: nudgeData } \= await supabase.from('nudge\_events').select('\*').eq('user\_id', user\!.id).gte('sent\_at', today).order('sent\_at', { ascending: false });  
+    setNudges(nudgeData || \[\]);
+
+    const target \= profileData?.protein\_target\_g || 100;  
+    const pct \= proteinSum / target;  
+    const lastLog \= proteinLogs && proteinLogs.length \> 0 ? new Date(proteinLogs\[0\].logged\_at) : null;  
+    const hoursSince \= lastLog ? (Date.now() \- lastLog.getTime()) / 3600000 : 24;
+
+    if (pct \>= 0.8 && hoursSince \<= 4\) setWorkoutStatus('green');  
+    else if (pct \>= 0.5 && hoursSince \<= 6\) setWorkoutStatus('yellow');  
+    else if (pct \>= 0.3 && hoursSince \<= 12\) setWorkoutStatus('orange');  
+    else setWorkoutStatus('red');  
+  }
+
+  const onRefresh \= async () \=\> {  
+    setRefreshing(true);  
+    await loadData();  
+    setRefreshing(false);  
+  };
+
+  const proteinPct \= Math.min((proteinToday / (profile?.protein\_target\_g || 100)) \* 100, 100);  
+  const hydrationPct \= Math.min((hydrationToday / 64\) \* 100, 100);
+
+  const statusMessages \= {  
+    green: { text: "You're fueled. Today's workout is ready.", color: '\#10b981' },  
+    yellow: { text: 'Light session available. Hit your protein goal to unlock full training.', color: '\#f59e0b' },  
+    orange: { text: 'Mobility only today. Eat first, train later.', color: '\#f97316' },  
+    red: { text: 'Rest day recommended. Focus on eating today.', color: '\#ef4444' },  
+  };
+
+  const greeting \= () \=\> {  
+    const h \= new Date().getHours();  
+    if (h \< 12\) return 'Good morning';  
+    if (h \< 18\) return 'Good afternoon';  
+    return 'Good evening';  
+  };
+
+  return (  
+    \<ScrollView  
+      style={styles.container}  
+      refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}  
+    \>  
+      \<View style={styles.header}\>  
+        \<Text style={styles.greeting}\>{greeting()}, {profile?.first\_name}\</Text\>  
+        \<Text style={styles.date}\>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\</Text\>  
+        \<TouchableOpacity onPress={() \=\> navigation.navigate('Settings' as never)} style={styles.gear}\>  
+          \<Text style={{ color: '\#94a3b8', fontSize: 20 }}\>⚙️\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>
+
+      \<View style={styles.card}\>  
+        \<View style={styles.progressRow}\>  
+          \<View style={styles.progressItem}\>  
+            \<Text style={styles.progressLabel}\>Protein\</Text\>  
+            \<Text style={styles.progressValue}\>{Math.round(proteinToday)}g / {Math.round(profile?.protein\_target\_g || 100)}g\</Text\>  
+            \<View style={styles.barBg}\>  
+              \<View style={\[styles.barFill, { width: \`${proteinPct}%\`, backgroundColor: proteinPct \>= 80 ? '\#10b981' : proteinPct \>= 50 ? '\#f59e0b' : '\#f97316' }\]} /\>  
+            \</View\>  
+          \</View\>  
+          \<View style={styles.progressItem}\>  
+            \<Text style={styles.progressLabel}\>Hydration\</Text\>  
+            \<Text style={styles.progressValue}\>{Math.round(hydrationToday)} / 64oz\</Text\>  
+            \<View style={styles.barBg}\>  
+              \<View style={\[styles.barFill, { width: \`${hydrationPct}%\`, backgroundColor: '\#0ea5e9' }\]} /\>  
+            \</View\>  
+          \</View\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.card}\>  
+        \<Text style={styles.cardTitle}\>Next Meal\</Text\>  
+        \<Text style={styles.cardBody}\>Greek Yogurt Parfait — 23g protein at 7:00 AM\</Text\>  
+        \<View style={styles.buttonRow}\>  
+          \<TouchableOpacity style={styles.smallButton} onPress={() \=\> {}}\>  
+            \<Text style={styles.smallButtonText}\>I Ate This\</Text\>  
+          \</TouchableOpacity\>  
+          \<TouchableOpacity style={styles.smallButtonOutline} onPress={() \=\> {}}\>  
+            \<Text style={styles.smallButtonOutlineText}\>Not feeling this\</Text\>  
+          \</TouchableOpacity\>  
+        \</View\>  
+      \</View\>
+
+      {nudges.length \> 0 && (  
+        \<View style={styles.card}\>  
+          \<Text style={styles.cardTitle}\>Today's Nudges\</Text\>  
+          {nudges.map((n, i) \=\> (  
+            \<View key={i} style={styles.nudgeRow}\>  
+              \<Text style={styles.nudgeText}\>  
+                {n.nudge\_type \=== 'meal\_reminder' ? 'Meal reminder' : n.nudge\_type \=== 'protein\_deficit' ? 'Protein reminder' : n.nudge\_type} sent {new Date(n.sent\_at).toLocaleTimeString(\[\], { hour: '2-digit', minute: '2-digit' })}  
+              \</Text\>  
+              \<Text style={styles.nudgeStatus}\>  
+                {n.action\_taken \=== 'logged' ? '✓ logged' : n.action\_taken \=== 'dismissed' ? 'dismissed' : 'no response'}  
+              \</Text\>  
+            \</View\>  
+          ))}  
+        \</View\>  
+      )}
+
+      \<TouchableOpacity style={styles.card} onPress={() \=\> navigation.navigate('Train' as never)}\>  
+        \<Text style={styles.cardTitle}\>Today's Training\</Text\>  
+        \<Text style={\[styles.statusText, { color: statusMessages\[workoutStatus\].color }\]}\>  
+          {statusMessages\[workoutStatus\].text}  
+        \</Text\>  
+      \</TouchableOpacity\>
+
+      \<TouchableOpacity style={styles.fab} onPress={() \=\> {}}\>  
+        \<Text style={styles.fabText}\>+\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a' },  
+  header: { padding: 24, paddingTop: 48 },  
+  greeting: { fontSize: 24, fontWeight: 'bold', color: '\#f8fafc' },  
+  date: { fontSize: 14, color: '\#94a3b8', marginTop: 4 },  
+  gear: { position: 'absolute', top: 48, right: 24 },  
+  card: { backgroundColor: '\#1e293b', borderRadius: 16, marginHorizontal: 24, marginBottom: 16, padding: 20 },  
+  cardTitle: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 12 },  
+  cardBody: { fontSize: 14, color: '\#cbd5e1', marginBottom: 16 },  
+  progressRow: { flexDirection: 'row', gap: 20 },  
+  progressItem: { flex: 1 },  
+  progressLabel: { fontSize: 12, color: '\#94a3b8', marginBottom: 4 },  
+  progressValue: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 8 },  
+  barBg: { height: 8, backgroundColor: '\#334155', borderRadius: 4 },  
+  barFill: { height: 8, borderRadius: 4 },  
+  buttonRow: { flexDirection: 'row', gap: 12 },  
+  smallButton: { backgroundColor: '\#0ea5e9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1 },  
+  smallButtonText: { color: '\#f8fafc', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
+  smallButtonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1 },  
+  smallButtonOutlineText: { color: '\#0ea5e9', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
+  nudgeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '\#334155' },  
+  nudgeText: { fontSize: 13, color: '\#cbd5e1', flex: 1 },  
+  nudgeStatus: { fontSize: 13, color: '\#94a3b8' },  
+  statusText: { fontSize: 14, fontWeight: '500' },  
+  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '\#0ea5e9', alignItems: 'center', justifyContent: 'center', shadowColor: '\#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },  
+  fabText: { color: '\#f8fafc', fontSize: 28, fontWeight: '300' },  
+});  
+"""
+
+mobile\_screens\_MealsScreen\_tsx \= """import React, { useState, useEffect } from 'react';  
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import mealsData from '../data/meals.json';
+
+const MEALS \= mealsData as any\[\];
+
+export default function MealsScreen() {  
+  const { user } \= useAuth();  
+  const \[textureFilter, setTextureFilter\] \= useState\<string\>('all');  
+  const \[mealTypeFilter, setMealTypeFilter\] \= useState\<string\>('all');  
+  const \[search, setSearch\] \= useState('');  
+  const \[selections, setSelections\] \= useState\<any\[\]\>(\[\]);
+
+  useEffect(() \=\> {  
+    loadSelections();  
+  }, \[\]);
+
+  async function loadSelections() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data } \= await supabase.from('meal\_selections').select('selections').eq('user\_id', user\!.id).eq('week\_start', today).single();  
+    if (data) setSelections(data.selections);  
+  }
+
+  const filteredMeals \= MEALS.filter(m \=\> {  
+    if (textureFilter \!== 'all' && \!m.texture.includes(textureFilter)) return false;  
+    if (mealTypeFilter \!== 'all' && \!m.meal\_types.includes(mealTypeFilter)) return false;  
+    if (search && \!m.name.toLowerCase().includes(search.toLowerCase())) return false;  
+    return true;  
+  });
+
+  return (  
+    \<ScrollView style={styles.container}\>  
+      \<Text style={styles.header}\>Meal Library\</Text\>  
+      \<TextInput style={styles.search} placeholder="Search meals..." placeholderTextColor="\#64748b" value={search} onChangeText={setSearch} /\>  
+      \<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}\>  
+        {\['all', 'liquid', 'soft', 'standard'\].map(t \=\> (  
+          \<TouchableOpacity key={t} style={\[styles.filterChip, textureFilter \=== t && styles.filterActive\]} onPress={() \=\> setTextureFilter(t)}\>  
+            \<Text style={styles.filterText}\>{t}\</Text\>  
+          \</TouchableOpacity\>  
+        ))}  
+      \</ScrollView\>  
+      \<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}\>  
+        {\['all', 'breakfast', 'lunch', 'dinner', 'snack'\].map(t \=\> (  
+          \<TouchableOpacity key={t} style={\[styles.filterChip, mealTypeFilter \=== t && styles.filterActive\]} onPress={() \=\> setMealTypeFilter(t)}\>  
+            \<Text style={styles.filterText}\>{t}\</Text\>  
+          \</TouchableOpacity\>  
+        ))}  
+      \</ScrollView\>  
+      {filteredMeals.map(meal \=\> (  
+        \<View key={meal.id} style={styles.mealCard}\>  
+          \<Text style={styles.mealName}\>{meal.name}\</Text\>  
+          \<View style={styles.mealMeta}\>  
+            \<Text style={styles.mealMetaText}\>{meal.protein\_g}g protein\</Text\>  
+            \<Text style={styles.mealMetaText}\>{meal.calories} cal\</Text\>  
+            \<Text style={styles.mealMetaText}\>{meal.prep\_time\_min} min\</Text\>  
+          \</View\>  
+          \<View style={styles.textureRow}\>  
+            {meal.texture.map((t: string) \=\> (  
+              \<View key={t} style={styles.badge}\>\<Text style={styles.badgeText}\>{t}\</Text\>\</View\>  
+            ))}  
+          \</View\>  
+        \</View\>  
+      ))}  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 16 },  
+  search: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 14, color: '\#f8fafc', fontSize: 16, marginBottom: 12 },  
+  filters: { marginBottom: 12 },  
+  filterChip: { backgroundColor: '\#1e293b', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginRight: 8 },  
+  filterActive: { backgroundColor: '\#0ea5e9' },  
+  filterText: { color: '\#f8fafc', fontSize: 13 },  
+  mealCard: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 16, marginBottom: 12 },  
+  mealName: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 8 },  
+  mealMeta: { flexDirection: 'row', gap: 16, marginBottom: 8 },  
+  mealMetaText: { fontSize: 13, color: '\#94a3b8' },  
+  textureRow: { flexDirection: 'row', gap: 8 },  
+  badge: { backgroundColor: '\#0f172a', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },  
+  badgeText: { fontSize: 11, color: '\#0ea5e9' },  
+});  
+"""
+
+mobile\_screens\_TrainScreen\_tsx \= """import React, { useEffect, useState, useCallback } from 'react';  
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import workoutData from '../data/workouts.json';  
+import { useFocusEffect } from '@react-navigation/native';
+
+function calcFuelStatus(proteinConsumedG: number, proteinTargetG: number, lastLoggedAt: Date | null): 'green' | 'yellow' | 'orange' | 'red' {  
+  const hoursSinceLog \= lastLoggedAt ? (Date.now() \- lastLoggedAt.getTime()) / 3600000 : 24;  
+  const pct \= proteinConsumedG / proteinTargetG;  
+  if (pct \>= 0.8 && hoursSinceLog \<= 4\) return 'green';  
+  if (pct \>= 0.5 && hoursSinceLog \<= 6\) return 'yellow';  
+  if (pct \>= 0.3 && hoursSinceLog \<= 12\) return 'orange';  
+  return 'red';  
+}
+
+export default function TrainScreen() {  
+  const { user } \= useAuth();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[proteinToday, setProteinToday\] \= useState(0);  
+  const \[fuelStatus, setFuelStatus\] \= useState\<'green' | 'yellow' | 'orange' | 'red'\>('red');  
+  const \[todayWorkout, setTodayWorkout\] \= useState\<any\>(null);  
+  const \[refreshing, setRefreshing\] \= useState(false);
+
+  useFocusEffect(  
+    useCallback(() \=\> {  
+      loadData();  
+    }, \[\])  
+  );
+
+  async function loadData() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data: profileData } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    setProfile(profileData);
+
+    const { data: proteinLogs } \= await supabase.from('protein\_logs').select('amount\_g, logged\_at').eq('user\_id', user\!.id).gte('logged\_at', today);  
+    const proteinSum \= (proteinLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_g, 0);  
+    setProteinToday(proteinSum);
+
+    const lastLog \= proteinLogs && proteinLogs.length \> 0 ? new Date(proteinLogs\[0\].logged\_at) : null;  
+    const status \= calcFuelStatus(proteinSum, profileData?.protein\_target\_g || 100, lastLog);  
+    setFuelStatus(status);
+
+    const startDate \= new Date(profileData?.created\_at || new Date());  
+    const daysDiff \= Math.floor((Date.now() \- startDate.getTime()) / (1000 \* 60 \* 60 \* 24));  
+    const dayNumber \= (daysDiff % 3\) \+ 1;  
+    const tier \= profileData?.tier || 'glp1';  
+    setTodayWorkout((workoutData as any)\[tier\]?.\[\`day${dayNumber}\`\]);
+
+    await supabase.from('workout\_logs').insert({  
+      user\_id: user\!.id,  
+      scheduled\_for: today,  
+      day\_number: dayNumber,  
+      fuel\_status: status,  
+      protein\_at\_start\_g: proteinSum,  
+      status: status \=== 'red' ? 'skipped\_underfueled' : 'scheduled',  
+    });  
+  }
+
+  const onRefresh \= async () \=\> {  
+    setRefreshing(true);  
+    await loadData();  
+    setRefreshing(false);  
+  };
+
+  const mobilityExercises \= \[  
+    { name: 'Cat-Cow', reps: '10 breaths', cue: 'Move slowly with your breath' },  
+    { name: 'Hip Circles', reps: '10 each direction', cue: 'Wide stance, big circles' },  
+    { name: 'Thoracic Rotation', reps: '10 each side', cue: 'Open chest to ceiling' },  
+    { name: 'Deep Squat Hold', reps: '60 seconds', cue: 'Heels down, chest up' },  
+    { name: 'Couch Stretch', reps: '90 seconds each leg', cue: 'Squeeze glute, push hips forward' },  
+  \];
+
+  if (fuelStatus \=== 'red') {  
+    return (  
+      \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+        \<Text style={styles.header}\>Rest Day Recommended\</Text\>  
+        \<Text style={styles.body}\>Your body needs fuel before it needs training. Eating today is the workout.\</Text\>  
+        \<Text style={styles.proteinStatus}\>You've logged {Math.round(proteinToday)}g of {Math.round(profile?.protein\_target\_g || 100)}g protein goal\</Text\>  
+        \<TouchableOpacity style={styles.button} onPress={() \=\> {}}\>  
+          \<Text style={styles.buttonText}\>Log Protein Now\</Text\>  
+        \</TouchableOpacity\>  
+        \<TouchableOpacity style={styles.buttonOutline} onPress={() \=\> {}}\>  
+          \<Text style={styles.buttonOutlineText}\>Reschedule Workout\</Text\>  
+        \</TouchableOpacity\>  
+      \</ScrollView\>  
+    );  
+  }
+
+  if (fuelStatus \=== 'orange') {  
+    return (  
+      \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+        \<Text style={styles.header}\>Mobility Session\</Text\>  
+        \<Text style={styles.body}\>15-minute mobility flow. No equipment needed.\</Text\>  
+        {mobilityExercises.map((ex, i) \=\> (  
+          \<View key={i} style={styles.exerciseCard}\>  
+            \<Text style={styles.exerciseName}\>{ex.name}\</Text\>  
+            \<Text style={styles.exerciseReps}\>{ex.reps}\</Text\>  
+            \<Text style={styles.exerciseCue}\>{ex.cue}\</Text\>  
+          \</View\>  
+        ))}  
+      \</ScrollView\>  
+    );  
+  }
+
+  const isYellow \= fuelStatus \=== 'yellow';  
+  const exercises \= todayWorkout?.exercises || \[\];
+
+  return (  
+    \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+      \<Text style={styles.header}\>{todayWorkout?.name || 'Workout'}\</Text\>  
+      {isYellow && \<Text style={styles.banner}\>Consider a lighter session today — you're at {Math.round((proteinToday / (profile?.protein\_target\_g || 100)) \* 100)}% of your protein goal.\</Text\>}  
+      \<Text style={styles.duration}\>{todayWorkout?.duration\_min || 25} min • {exercises.length} exercises\</Text\>  
+      {exercises.map((ex: any, i: number) \=\> (  
+        \<View key={i} style={styles.exerciseCard}\>  
+          \<Text style={styles.exerciseName}\>{ex.name}\</Text\>  
+          \<Text style={styles.exerciseReps}\>{isYellow ? 2 : ex.sets} sets × {ex.reps}\</Text\>  
+          \<Text style={styles.exerciseCue}\>{ex.cue}\</Text\>  
+          {ex.band\_mod && \<Text style={styles.bandMod}\>Band: {ex.band\_mod}\</Text\>}  
+        \</View\>  
+      ))}  
+      \<TouchableOpacity style={styles.button} onPress={() \=\> {}}\>  
+        \<Text style={styles.buttonText}\>Complete Workout\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  body: { fontSize: 16, color: '\#cbd5e1', lineHeight: 24, marginBottom: 24 },  
+  proteinStatus: { fontSize: 14, color: '\#94a3b8', marginBottom: 24 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  buttonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center' },  
+  buttonOutlineText: { color: '\#0ea5e9', fontSize: 16, fontWeight: '600' },  
+  banner: { backgroundColor: '\#f59e0b20', borderLeftWidth: 4, borderLeftColor: '\#f59e0b', padding: 12, borderRadius: 8, color: '\#f59e0b', fontSize: 14, marginBottom: 16 },  
+  duration: { fontSize: 14, color: '\#94a3b8', marginBottom: 16 },  
+  exerciseCard: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 16, marginBottom: 12 },  
+  exerciseName: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 4 },  
+  exerciseReps: { fontSize: 14, color: '\#0ea5e9', marginBottom: 4 },  
+  exerciseCue: { fontSize: 13, color: '\#94a3b8', marginBottom: 4 },  
+  bandMod: { fontSize: 12, color: '\#f59e0b', fontStyle: 'italic' },  
+});  
+"""
+
+mobile\_screens\_GroceryScreen\_tsx \= """import React from 'react';  
+import { View, Text, StyleSheet } from 'react-native';
+
+export default function GroceryScreen() {  
+  return (  
+    \<View style={styles.container}\>  
+      \<Text style={styles.header}\>Grocery List\</Text\>  
+      \<Text style={styles.body}\>Coming soon — auto-generated grocery lists based on your weekly meal plan.\</Text\>  
+    \</View\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center', alignItems: 'center' },  
+  header: { fontSize: 24, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  body: { fontSize: 14, color: '\#94a3b8', textAlign: 'center' },  
+});  
+"""
+
+mobile\_screens\_OnboardingScreen\_tsx \= """import React, { useState } from 'react';  
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function OnboardingScreen() {  
+  const { user } \= useAuth();  
+  const \[step, setStep\] \= useState(0);  
+  const \[firstName, setFirstName\] \= useState('');  
+  const \[bodyWeight, setBodyWeight\] \= useState('');  
+  const \[tier, setTier\] \= useState\<'glp1' | 'longevity'\>('glp1');  
+  const \[proteinTarget, setProteinTarget\] \= useState('');  
+  const \[notificationsEnabled, setNotificationsEnabled\] \= useState(true);
+
+  const steps \= \[  
+    'Welcome to Chassis',  
+    'Your Profile',  
+    'Program Selection',  
+    'Protein Target',  
+    'Notifications',  
+    'All Set',  
+  \];
+
+  const handleNext \= () \=\> {  
+    if (step \=== 1 && (\!firstName || \!bodyWeight)) {  
+      Alert.alert('Required', 'Please fill in all fields');  
+      return;  
+    }  
+    if (step \=== 3 && \!proteinTarget) {  
+      Alert.alert('Required', 'Please set a protein target');  
+      return;  
+    }  
+    if (step \< steps.length \- 1\) setStep(step \+ 1);  
+    else completeOnboarding();  
+  };
+
+  const handleBack \= () \=\> {  
+    if (step \> 0\) setStep(step \- 1);  
+  };
+
+  const completeOnboarding \= async () \=\> {  
+    const { error } \= await supabase.from('profiles').upsert({  
+      id: user\!.id,  
+      first\_name: firstName,  
+      body\_weight\_kg: parseFloat(bodyWeight),  
+      tier,  
+      protein\_target\_g: parseFloat(proteinTarget),  
+      onboarding\_complete: true,  
+      notifications\_enabled: notificationsEnabled,  
+    });
+
+    if (error) {  
+      Alert.alert('Error', error.message);  
+    } else {  
+      await supabase.auth.updateUser({  
+        data: { onboarding\_complete: true }  
+      });  
+    }  
+  };
+
+  const renderStep \= () \=\> {  
+    switch (step) {  
+      case 0:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Welcome to Chassis\</Text\>  
+            \<Text style={styles.subtitle}\>Built to keep you eating, moving, and accountable on your GLP-1 journey.\</Text\>  
+          \</\>  
+        );  
+      case 1:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Your Profile\</Text\>  
+            \<TextInput style={styles.input} placeholder="First Name" placeholderTextColor="\#64748b" value={firstName} onChangeText={setFirstName} /\>  
+            \<TextInput style={styles.input} placeholder="Body Weight (kg)" placeholderTextColor="\#64748b" value={bodyWeight} onChangeText={setBodyWeight} keyboardType="numeric" /\>  
+          \</\>  
+        );  
+      case 2:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Program Selection\</Text\>  
+            \<TouchableOpacity style={\[styles.option, tier \=== 'glp1' && styles.optionActive\]} onPress={() \=\> setTier('glp1')}\>  
+              \<Text style={styles.optionText}\>GLP-1 Recovery\</Text\>  
+              \<Text style={styles.optionSub}\>Focus on muscle preservation & nutrition\</Text\>  
+            \</TouchableOpacity\>  
+            \<TouchableOpacity style={\[styles.option, tier \=== 'longevity' && styles.optionActive\]} onPress={() \=\> setTier('longevity')}\>  
+              \<Text style={styles.optionText}\>Longevity\</Text\>  
+              \<Text style={styles.optionSub}\>Zone 2, strength, & metabolic health\</Text\>  
+            \</TouchableOpacity\>  
+          \</\>  
+        );  
+      case 3:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Protein Target\</Text\>  
+            \<Text style={styles.subtitle}\>Daily protein goal in grams\</Text\>  
+            \<TextInput style={styles.input} placeholder="e.g. 120" placeholderTextColor="\#64748b" value={proteinTarget} onChangeText={setProteinTarget} keyboardType="numeric" /\>  
+            \<Text style={styles.hint}\>Recommended: {Math.round(parseFloat(bodyWeight || '0') \* 1.6)}g based on your weight\</Text\>  
+          \</\>  
+        );  
+      case 4:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Notifications\</Text\>  
+            \<Text style={styles.subtitle}\>Get meal reminders and protein nudges\</Text\>  
+            \<TouchableOpacity style={\[styles.option, notificationsEnabled && styles.optionActive\]} onPress={() \=\> setNotificationsEnabled(true)}\>  
+              \<Text style={styles.optionText}\>Enable Notifications\</Text\>  
+            \</TouchableOpacity\>  
+            \<TouchableOpacity style={\[styles.option, \!notificationsEnabled && styles.optionActive\]} onPress={() \=\> setNotificationsEnabled(false)}\>  
+              \<Text style={styles.optionText}\>Skip for Now\</Text\>  
+            \</TouchableOpacity\>  
+          \</\>  
+        );  
+      case 5:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>All Set\!\</Text\>  
+            \<Text style={styles.subtitle}\>You're ready to start your journey with Chassis.\</Text\>  
+          \</\>  
+        );  
+      default:  
+        return null;  
+    }  
+  };
+
+  return (  
+    \<ScrollView contentContainerStyle={styles.container}\>  
+      \<View style={styles.progressBar}\>  
+        \<View style={\[styles.progressFill, { width: \`${((step \+ 1\) / steps.length) \* 100}%\` }\]} /\>  
+      \</View\>  
+      \<View style={styles.content}\>  
+        {renderStep()}  
+      \</View\>  
+      \<View style={styles.buttonRow}\>  
+        {step \> 0 && (  
+          \<TouchableOpacity style={styles.buttonOutline} onPress={handleBack}\>  
+            \<Text style={styles.buttonOutlineText}\>Back\</Text\>  
+          \</TouchableOpacity\>  
+        )}  
+        \<TouchableOpacity style={\[styles.button, step \=== 0 && { flex: 1 }\]} onPress={handleNext}\>  
+          \<Text style={styles.buttonText}\>{step \=== steps.length \- 1 ? 'Get Started' : 'Next'}\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flexGrow: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center' },  
+  progressBar: { height: 4, backgroundColor: '\#1e293b', borderRadius: 2, marginBottom: 40 },  
+  progressFill: { height: 4, backgroundColor: '\#0ea5e9', borderRadius: 2 },  
+  content: { flex: 1, justifyContent: 'center' },  
+  title: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  subtitle: { fontSize: 14, color: '\#94a3b8', marginBottom: 24 },  
+  input: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, color: '\#f8fafc', marginBottom: 12, fontSize: 16 },  
+  option: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '\#334155' },  
+  optionActive: { borderColor: '\#0ea5e9', backgroundColor: '\#0ea5e920' },  
+  optionText: { fontSize: 16, fontWeight: '600', color: '\#f8fafc' },  
+  optionSub: { fontSize: 13, color: '\#94a3b8', marginTop: 4 },  
+  hint: { fontSize: 13, color: '\#64748b', marginTop: 8 },  
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 24 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', flex: 1 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  buttonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', flex: 1 },  
+  buttonOutlineText: { color: '\#0ea5e9', fontSize: 16, fontWeight: '600' },  
+});  
+"""
+
+mobile\_screens\_SettingsScreen\_tsx \= """import React, { useState, useEffect } from 'react';  
+import { View, Text, TouchableOpacity, StyleSheet, Switch, Alert, ScrollView } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function SettingsScreen() {  
+  const { user, signOut } \= useAuth();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[notifications, setNotifications\] \= useState(true);
+
+  useEffect(() \=\> {  
+    loadProfile();  
+  }, \[\]);
+
+  async function loadProfile() {  
+    const { data } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    if (data) {  
+      setProfile(data);  
+      setNotifications(data.notifications\_enabled ?? true);  
+    }  
+  }
+
+  async function toggleNotifications(value: boolean) {  
+    setNotifications(value);  
+    await supabase.from('profiles').update({ notifications\_enabled: value }).eq('id', user\!.id);  
+  }
+
+  async function handleSignOut() {  
+    await signOut();  
+  }
+
+  async function manageSubscription() {  
+    const { data, error } \= await supabase.functions.invoke('create-checkout-session', {  
+      body: { user\_id: user\!.id },  
+    });  
+    if (data?.url) {  
+      // Would use expo-web-browser in real app  
+      Alert.alert('Subscription', 'Stripe checkout URL: ' \+ data.url);  
+    }  
+  }
+
+  return (  
+    \<ScrollView style={styles.container}\>  
+      \<Text style={styles.header}\>Settings\</Text\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Profile\</Text\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Name\</Text\>  
+          \<Text style={styles.value}\>{profile?.first\_name || '—'}\</Text\>  
+        \</View\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Tier\</Text\>  
+          \<Text style={styles.value}\>{profile?.tier || '—'}\</Text\>  
+        \</View\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Protein Target\</Text\>  
+          \<Text style={styles.value}\>{profile?.protein\_target\_g ? \`${profile.protein\_target\_g}g\` : '—'}\</Text\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Preferences\</Text\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Push Notifications\</Text\>  
+          \<Switch value={notifications} onValueChange={toggleNotifications} trackColor={{ false: '\#334155', true: '\#0ea5e9' }} /\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Subscription\</Text\>  
+        \<TouchableOpacity style={styles.button} onPress={manageSubscription}\>  
+          \<Text style={styles.buttonText}\>Manage Subscription\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>
+
+      \<TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}\>  
+        \<Text style={styles.signOutText}\>Sign Out\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 24 },  
+  section: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 20, marginBottom: 16 },  
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: '\#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },  
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '\#334155' },  
+  label: { fontSize: 16, color: '\#f8fafc' },  
+  value: { fontSize: 16, color: '\#94a3b8' },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center' },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  signOutButton: { marginTop: 24, padding: 16, alignItems: 'center' },  
+  signOutText: { color: '\#ef4444', fontSize: 16, fontWeight: '600' },  
+});  
+"""
+
+clinic\_lib\_supabase\_ts \= """import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl \= process.env.REACT\_APP\_SUPABASE\_URL || 'https://your-project.supabase.co';  
+const supabaseAnonKey \= process.env.REACT\_APP\_SUPABASE\_ANON\_KEY || 'your-anon-key';
+
+export const supabase \= createClient(supabaseUrl, supabaseAnonKey);  
+"""
+
+clinic\_App\_tsx \= """import React, { useEffect, useState } from 'react';  
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';  
+import { supabase } from './lib/supabase';  
+import LoginPage from './pages/LoginPage';  
+import PatientPanel from './pages/PatientPanel';  
+import PatientDetail from './pages/PatientDetail';  
+import ClinicSettings from './pages/ClinicSettings';
+
+function App() {  
+  const \[session, setSession\] \= useState\<any\>(null);  
+  const \[clinicUser, setClinicUser\] \= useState\<any\>(null);  
+  const \[loading, setLoading\] \= useState(true);
+
+  useEffect(() \=\> {  
+    supabase.auth.getSession().then(({ data: { session } }) \=\> {  
+      setSession(session);  
+      if (session?.user) checkClinicUser(session.user.id);  
+      else setLoading(false);  
+    });
+
+    const { data: listener } \= supabase.auth.onAuthStateChange((\_event, session) \=\> {  
+      setSession(session);  
+      if (session?.user) checkClinicUser(session.user.id);  
+      else { setClinicUser(null); setLoading(false); }  
+    });
+
+    return () \=\> listener.subscription.unsubscribe();  
+  }, \[\]);
+
+  async function checkClinicUser(userId: string) {  
+    const { data, error } \= await supabase.from('clinic\_users').select('\*, clinics(\*)').eq('id', userId).single();  
+    if (error || \!data) {  
+      await supabase.auth.signOut();  
+      setClinicUser(null);  
+    } else {  
+      setClinicUser(data);  
+    }  
+    setLoading(false);  
+  }
+
+  if (loading) return \<div style={{ background: '\#0f172a', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '\#f8fafc' }}\>Loading...\</div\>;
+
+  return (  
+    \<BrowserRouter\>  
+      {\!session ? (  
+        \<Routes\>\<Route path="\*" element={\<LoginPage /\>} /\>\</Routes\>  
+      ) : \!clinicUser ? (  
+        \<Routes\>\<Route path="\*" element={\<div style={{ padding: 40, textAlign: 'center' }}\>Access not authorized\</div\>} /\>\</Routes\>  
+      ) : (  
+        \<Routes\>  
+          \<Route path="/" element={\<PatientPanel clinicUser={clinicUser} /\>} /\>  
+          \<Route path="/patient/:id" element={\<PatientDetail clinicUser={clinicUser} /\>} /\>  
+          \<Route path="/settings" element={\<ClinicSettings clinicUser={clinicUser} /\>} /\>  
+          \<Route path="\*" element={\<Navigate to="/" /\>} /\>  
+        \</Routes\>  
+      )}  
+    \</BrowserRouter\>  
+  );  
+}
+
+export default App;  
+"""
+
+clinic\_pages\_LoginPage\_tsx \= """import React, { useState } from 'react';  
+import { supabase } from '../lib/supabase';
+
+export default function LoginPage() {  
+  const \[email, setEmail\] \= useState('');  
+  const \[password, setPassword\] \= useState('');  
+  const \[error, setError\] \= useState('');
+
+  const handleLogin \= async (e: React.FormEvent) \=\> {  
+    e.preventDefault();  
+    setError('');  
+    const { error } \= await supabase.auth.signInWithPassword({ email, password });  
+    if (error) setError('Access not authorized');  
+  };
+
+  return (  
+    \<div style={{ minHeight: '100vh', background: '\#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}\>  
+      \<div style={{ width: 360, padding: 40 }}\>  
+        \<h1 style={{ color: '\#f8fafc', fontSize: 32, marginBottom: 8, fontFamily: 'Playfair Display, serif' }}\>Chassis\</h1\>  
+        \<p style={{ color: '\#94a3b8', marginBottom: 32 }}\>Clinic Dashboard\</p\>  
+        \<form onSubmit={handleLogin}\>  
+          \<input  
+            type="email"  
+            placeholder="Email"  
+            value={email}  
+            onChange={e \=\> setEmail(e.target.value)}  
+            style={{ width: '100%', padding: 14, marginBottom: 12, borderRadius: 12, border: 'none', background: '\#1e293b', color: '\#f8fafc', fontSize: 16 }}  
+          /\>  
+          \<input  
+            type="password"  
+            placeholder="Password"  
+            value={password}  
+            onChange={e \=\> setPassword(e.target.value)}  
+            style={{ width: '100%', padding: 14, marginBottom: 24, borderRadius: 12, border: 'none', background: '\#1e293b', color: '\#f8fafc', fontSize: 16 }}  
+          /\>  
+          \<button type="submit" style={{ width: '100%', padding: 14, borderRadius: 12, border: 'none', background: '\#0ea5e9', color: '\#f8fafc', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}\>  
+            Sign In  
+          \</button\>  
+        \</form\>  
+        {error && \<p style={{ color: '\#ef4444', marginTop: 16, textAlign: 'center' }}\>{error}\</p\>}  
+      \</div\>  
+    \</div\>  
+  );  
+}  
+"""
+
+clinic\_pages\_PatientPanel\_tsx \= """import React, { useEffect, useState } from 'react';  
+import { Link } from 'react-router-dom';  
+import { supabase } from '../lib/supabase';
+
+export default function PatientPanel({ clinicUser }: { clinicUser: any }) {  
+  const \[patients, setPatients\] \= useState\<any\[\]\>(\[\]);  
+  const \[loading, setLoading\] \= useState(true);
+
+  useEffect(() \=\> {  
+    loadPatients();  
+  }, \[\]);
+
+  async function loadPatients() {  
+    const { data } \= await supabase  
+      .from('profiles')  
+      .select('id, first\_name, created\_at, body\_weight\_kg, protein\_target\_g, tier, onboarding\_complete')  
+      .eq('clinic\_id', clinicUser.clinic\_id)  
+      .eq('onboarding\_complete', true);
+
+    const enriched \= await Promise.all((data || \[\]).map(async (p) \=\> {  
+      const weekStart \= new Date().toISOString().split('T')\[0\];  
+      const { data: proteinLogs } \= await supabase  
+        .from('protein\_logs')  
+        .select('amount\_g, logged\_at')  
+        .eq('user\_id', p.id)  
+        .gte('logged\_at', weekStart);
+
+      const { data: nudgeEvents } \= await supabase  
+        .from('nudge\_events')  
+        .select('action\_taken')  
+        .eq('user\_id', p.id)  
+        .gte('sent\_at', weekStart);
+
+      const { data: workoutLogs } \= await supabase  
+        .from('workout\_logs')  
+        .select('status')  
+        .eq('user\_id', p.id)  
+        .gte('scheduled\_for', weekStart);
+
+      const proteinSum \= (proteinLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_g, 0);  
+      const proteinDays \= new Set((proteinLogs || \[\]).map(l \=\> l.logged\_at.split('T')\[0\])).size;  
+      const avgProtein \= proteinDays \> 0 ? proteinSum / proteinDays : 0;  
+      const proteinPct \= p.protein\_target\_g ? (avgProtein / p.protein\_target\_g) \* 100 : 0;
+
+      const totalNudges \= (nudgeEvents || \[\]).length;  
+      const respondedNudges \= (nudgeEvents || \[\]).filter(n \=\> n.action\_taken && n.action\_taken \!== 'no\_action').length;  
+      const responseRate \= totalNudges \> 0 ? (respondedNudges / totalNudges) \* 100 : 100;
+
+      const completedWorkouts \= (workoutLogs || \[\]).filter(w \=\> w.status \=== 'completed').length;
+
+      const accountAge \= (Date.now() \- new Date(p.created\_at).getTime()) / (1000 \* 60 \* 60 \* 24);  
+      let status \= 'On Track';  
+      let statusColor \= '\#10b981';  
+      if (accountAge \< 7\) { status \= 'New'; statusColor \= '\#94a3b8'; }  
+      else if (proteinPct \< 50 || responseRate \< 25\) { status \= 'Non-Compliant'; statusColor \= '\#ef4444'; }  
+      else if (proteinPct \< 80 || responseRate \< 50\) { status \= 'Needs Attention'; statusColor \= '\#f59e0b'; }
+
+      return { ...p, proteinPct, responseRate, completedWorkouts, status, statusColor };  
+    }));
+
+    setPatients(enriched);  
+    setLoading(false);  
+  }
+
+  if (loading) return \<div style={{ padding: 40 }}\>Loading patients...\</div\>;
+
+  return (  
+    \<div style={{ minHeight: '100vh', background: '\#0f172a', padding: 40 }}\>  
+      \<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}\>  
+        \<div\>  
+          \<h1 style={{ color: '\#f8fafc', fontSize: 28, margin: 0 }}\>Patient Panel\</h1\>  
+          \<p style={{ color: '\#94a3b8', margin: '8px 0 0' }}\>{clinicUser.clinics?.name}\</p\>  
+        \</div\>  
+        \<Link to="/settings" style={{ color: '\#0ea5e9', textDecoration: 'none' }}\>Settings\</Link\>  
+      \</div\>
+
+      \<div style={{ background: '\#1e293b', borderRadius: 16, overflow: 'hidden' }}\>  
+        \<table style={{ width: '100%', borderCollapse: 'collapse' }}\>  
+          \<thead\>  
+            \<tr style={{ borderBottom: '1px solid \#334155' }}\>  
+              \<th style={{ padding: '16px 24px', textAlign: 'left', color: '\#94a3b8', fontSize: 13, fontWeight: 600 }}\>Patient\</th\>  
+              \<th style={{ padding: '16px 24px', textAlign: 'left', color: '\#94a3b8', fontSize: 13, fontWeight: 600 }}\>Protein Avg\</th\>  
+              \<th style={{ padding: '16px 24px', textAlign: 'left', color: '\#94a3b8', fontSize: 13, fontWeight: 600 }}\>Nudge Response\</th\>  
+              \<th style={{ padding: '16px 24px', textAlign: 'left', color: '\#94a3b8', fontSize: 13, fontWeight: 600 }}\>Workouts\</th\>  
+              \<th style={{ padding: '16px 24px', textAlign: 'left', color: '\#94a3b8', fontSize: 13, fontWeight: 600 }}\>Status\</th\>  
+            \</tr\>  
+          \</thead\>  
+          \<tbody\>  
+            {patients.map(p \=\> (  
+              \<tr key={p.id} style={{ borderBottom: '1px solid \#334155' }}\>  
+                \<td style={{ padding: '16px 24px' }}\>  
+                  \<Link to={\`/patient/${p.id}\`} style={{ color: '\#0ea5e9', textDecoration: 'none', fontWeight: 600 }}\>  
+                    {p.first\_name || 'Unnamed'}  
+                  \</Link\>  
+                  \<div style={{ color: '\#64748b', fontSize: 12, marginTop: 4 }}\>Started {new Date(p.created\_at).toLocaleDateString()}\</div\>  
+                \</td\>  
+                \<td style={{ padding: '16px 24px', color: '\#f8fafc' }}\>{Math.round(p.proteinPct)}%\</td\>  
+                \<td style={{ padding: '16px 24px', color: '\#f8fafc' }}\>{Math.round(p.responseRate)}%\</td\>  
+                \<td style={{ padding: '16px 24px', color: '\#f8fafc' }}\>{p.completedWorkouts}\</td\>  
+                \<td style={{ padding: '16px 24px' }}\>  
+                  \<span style={{ background: p.statusColor \+ '20', color: p.statusColor, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}\>  
+                    {p.status}  
+                  \</span\>  
+                \</td\>  
+              \</tr\>  
+            ))}  
+          \</tbody\>  
+        \</table\>  
+      \</div\>  
+    \</div\>  
+  );  
+}  
+"""
+
+clinic\_pages\_PatientDetail\_tsx \= """import React, { useEffect, useState } from 'react';  
+import { useParams, Link } from 'react-router-dom';  
+import { supabase } from '../lib/supabase';  
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+export default function PatientDetail({ clinicUser }: { clinicUser: any }) {  
+  const { id } \= useParams();  
+  const \[patient, setPatient\] \= useState\<any\>(null);  
+  const \[chartData, setChartData\] \= useState\<any\[\]\>(\[\]);  
+  const \[nudgeLog, setNudgeLog\] \= useState\<any\[\]\>(\[\]);
+
+  useEffect(() \=\> {  
+    loadPatient();  
+  }, \[id\]);
+
+  async function loadPatient() {  
+    const { data: profile } \= await supabase.from('profiles').select('\*').eq('id', id).single();  
+    if (\!profile || profile.clinic\_id \!== clinicUser.clinic\_id) return;  
+    setPatient(profile);
+
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const thirtyDaysAgo \= new Date(Date.now() \- 30 \* 24 \* 60 \* 60 \* 1000).toISOString().split('T')\[0\];
+
+    const { data: proteinLogs } \= await supabase  
+      .from('protein\_logs')  
+      .select('amount\_g, logged\_at')  
+      .eq('user\_id', id)  
+      .gte('logged\_at', thirtyDaysAgo);
+
+    const dailyMap: Record\<string, number\> \= {};  
+    for (const log of (proteinLogs || \[\])) {  
+      const day \= log.logged\_at.split('T')\[0\];  
+      dailyMap\[day\] \= (dailyMap\[day\] || 0\) \+ log.amount\_g;  
+    }
+
+    const chart \= Object.entries(dailyMap).map((\[day, amount\]) \=\> {  
+      const pct \= profile.protein\_target\_g ? (amount / profile.protein\_target\_g) \* 100 : 0;  
+      let color \= '\#ef4444';  
+      if (pct \>= 100\) color \= '\#10b981';  
+      else if (pct \>= 50\) color \= '\#f59e0b';  
+      else if (pct \>= 30\) color \= '\#f97316';  
+      return { day: day.slice(5), amount: Math.round(pct), color };  
+    }).slice(-30);
+
+# AppNavigator
+
+import os, json
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# mobile/src/navigation/AppNavigator.tsx  
+write\_file(f"{base}/mobile/src/navigation/AppNavigator.tsx", """import React from 'react';  
+import { NavigationContainer } from '@react-navigation/native';  
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';  
+import { createNativeStackNavigator } from '@react-navigation/native-stack';  
+import { Ionicons } from '@expo/vector-icons';  
+import { useAuth } from '../hooks/useAuth';  
+import { usePushNotifications } from '../hooks/usePushNotifications';
+
+import TodayScreen from '../screens/TodayScreen';  
+import MealsScreen from '../screens/MealsScreen';  
+import GroceryScreen from '../screens/GroceryScreen';  
+import TrainScreen from '../screens/TrainScreen';  
+import SettingsScreen from '../screens/SettingsScreen';  
+import OnboardingScreen from '../screens/OnboardingScreen';  
+import AuthScreen from '../screens/AuthScreen';
+
+const Tab \= createBottomTabNavigator();  
+const Stack \= createNativeStackNavigator();
+
+function MainTabs() {  
+  return (  
+    \<Tab.Navigator  
+      screenOptions={({ route }) \=\> ({  
+        tabBarActiveTintColor: '\#0ea5e9',  
+        tabBarInactiveTintColor: '\#64748b',  
+        tabBarStyle: { backgroundColor: '\#0f172a', borderTopColor: '\#1e293b' },  
+        headerStyle: { backgroundColor: '\#0f172a' },  
+        headerTintColor: '\#f8fafc',  
+        tabBarIcon: ({ color, size }) \=\> {  
+          let iconName: any \= 'home';  
+          if (route.name \=== 'Today') iconName \= 'home';  
+          else if (route.name \=== 'Meals') iconName \= 'restaurant';  
+          else if (route.name \=== 'Grocery') iconName \= 'cart';  
+          else if (route.name \=== 'Train') iconName \= 'barbell';  
+          return \<Ionicons name={iconName} size={size} color={color} /\>;  
+        },  
+      })}  
+    \>  
+      \<Tab.Screen name="Today" component={TodayScreen} /\>  
+      \<Tab.Screen name="Meals" component={MealsScreen} /\>  
+      \<Tab.Screen name="Grocery" component={GroceryScreen} /\>  
+      \<Tab.Screen name="Train" component={TrainScreen} /\>  
+    \</Tab.Navigator\>  
+  );  
+}
+
+export default function AppNavigator() {  
+  const { session, user, loading } \= useAuth();  
+  usePushNotifications();
+
+  if (loading) return null;
+
+  return (  
+    \<NavigationContainer\>  
+      \<Stack.Navigator screenOptions={{ headerShown: false }}\>  
+        {\!session ? (  
+          \<Stack.Screen name="Auth" component={AuthScreen} /\>  
+        ) : \!user?.user\_metadata?.onboarding\_complete ? (  
+          \<Stack.Screen name="Onboarding" component={OnboardingScreen} /\>  
+        ) : (  
+          \<\>  
+            \<Stack.Screen name="Main" component={MainTabs} /\>  
+            \<Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} /\>  
+          \</\>  
+        )}  
+      \</Stack.Navigator\>  
+    \</NavigationContainer\>  
+  );  
+}  
+""")
+
+print("AppNavigator written.")
+
+# App.tsx \+ AuthScreen
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# mobile/App.tsx  
+write\_file(f"{base}/mobile/App.tsx", """import React from 'react';  
+import { StatusBar } from 'expo-status-bar';  
+import { AuthProvider } from './src/hooks/useAuth';  
+import AppNavigator from './src/navigation/AppNavigator';
+
+export default function App() {  
+  return (  
+    \<AuthProvider\>  
+      \<AppNavigator /\>  
+      \<StatusBar style="light" /\>  
+    \</AuthProvider\>  
+  );  
+}  
+""")
+
+\# mobile/src/screens/AuthScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/AuthScreen.tsx", """import React, { useState } from 'react';  
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function AuthScreen() {  
+  const \[email, setEmail\] \= useState('');  
+  const \[password, setPassword\] \= useState('');  
+  const \[isSignUp, setIsSignUp\] \= useState(false);  
+  const { signIn, signUp } \= useAuth();
+
+  const handleSubmit \= async () \=\> {  
+    try {  
+      if (isSignUp) {  
+        await signUp(email, password);  
+        Alert.alert('Check your email', 'Confirm your email address to continue.');  
+      } else {  
+        await signIn(email, password);  
+      }  
+    } catch (err: any) {  
+      Alert.alert('Error', err.message);  
+    }  
+  };
+
+  return (  
+    \<View style={styles.container}\>  
+      \<Text style={styles.title}\>Chassis\</Text\>  
+      \<Text style={styles.subtitle}\>Built to keep GLP-1 patients eating, moving, and accountable.\</Text\>  
+      \<TextInput  
+        style={styles.input}  
+        placeholder="Email"  
+        placeholderTextColor="\#64748b"  
+        value={email}  
+        onChangeText={setEmail}  
+        autoCapitalize="none"  
+        keyboardType="email-address"  
+      /\>  
+      \<TextInput  
+        style={styles.input}  
+        placeholder="Password"  
+        placeholderTextColor="\#64748b"  
+        value={password}  
+        onChangeText={setPassword}  
+        secureTextEntry  
+      /\>  
+      \<TouchableOpacity style={styles.button} onPress={handleSubmit}\>  
+        \<Text style={styles.buttonText}\>{isSignUp ? 'Create Account' : 'Sign In'}\</Text\>  
+      \</TouchableOpacity\>  
+      \<TouchableOpacity onPress={() \=\> setIsSignUp(\!isSignUp)}\>  
+        \<Text style={styles.link}\>  
+          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}  
+        \</Text\>  
+      \</TouchableOpacity\>  
+    \</View\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center' },  
+  title: { fontSize: 36, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 8, fontFamily: 'PlayfairDisplay' },  
+  subtitle: { fontSize: 14, color: '\#94a3b8', marginBottom: 32 },  
+  input: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, color: '\#f8fafc', marginBottom: 12, fontSize: 16 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  link: { color: '\#0ea5e9', textAlign: 'center', marginTop: 20, fontSize: 14 },  
+});  
+""")
+
+print("App.tsx \+ AuthScreen written.")
+
+# TodayScreen
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# TodayScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/TodayScreen.tsx", """import React, { useEffect, useState, useCallback } from 'react';  
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+
+export default function TodayScreen() {  
+  const { user } \= useAuth();  
+  const navigation \= useNavigation();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[proteinToday, setProteinToday\] \= useState(0);  
+  const \[hydrationToday, setHydrationToday\] \= useState(0);  
+  const \[nudges, setNudges\] \= useState\<any\[\]\>(\[\]);  
+  const \[workoutStatus, setWorkoutStatus\] \= useState\<'green' | 'yellow' | 'orange' | 'red'\>('red');  
+  const \[refreshing, setRefreshing\] \= useState(false);
+
+  useFocusEffect(  
+    useCallback(() \=\> {  
+      loadData();  
+    }, \[\])  
+  );
+
+  async function loadData() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data: profileData } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    setProfile(profileData);
+
+    const { data: proteinLogs } \= await supabase.from('protein\_logs').select('amount\_g, logged\_at').eq('user\_id', user\!.id).gte('logged\_at', today).order('logged\_at', { ascending: false });  
+    const proteinSum \= (proteinLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_g, 0);  
+    setProteinToday(proteinSum);
+
+    const { data: hydrationLogs } \= await supabase.from('hydration\_logs').select('amount\_oz').eq('user\_id', user\!.id).gte('logged\_at', today);  
+    const hydrationSum \= (hydrationLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_oz, 0);  
+    setHydrationToday(hydrationSum);
+
+    const { data: nudgeData } \= await supabase.from('nudge\_events').select('\*').eq('user\_id', user\!.id).gte('sent\_at', today).order('sent\_at', { ascending: false });  
+    setNudges(nudgeData || \[\]);
+
+    const target \= profileData?.protein\_target\_g || 100;  
+    const pct \= proteinSum / target;  
+    const lastLog \= proteinLogs && proteinLogs.length \> 0 ? new Date(proteinLogs\[0\].logged\_at) : null;  
+    const hoursSince \= lastLog ? (Date.now() \- lastLog.getTime()) / 3600000 : 24;
+
+    if (pct \>= 0.8 && hoursSince \<= 4\) setWorkoutStatus('green');  
+    else if (pct \>= 0.5 && hoursSince \<= 6\) setWorkoutStatus('yellow');  
+    else if (pct \>= 0.3 && hoursSince \<= 12\) setWorkoutStatus('orange');  
+    else setWorkoutStatus('red');  
+  }
+
+  const onRefresh \= async () \=\> {  
+    setRefreshing(true);  
+    await loadData();  
+    setRefreshing(false);  
+  };
+
+  const proteinPct \= Math.min((proteinToday / (profile?.protein\_target\_g || 100)) \* 100, 100);  
+  const hydrationPct \= Math.min((hydrationToday / (profile?.hydration\_target\_oz || 64)) \* 100, 100);
+
+  const statusMessages \= {  
+    green: { text: "You're fueled. Today's workout is ready.", color: '\#10b981' },  
+    yellow: { text: 'Light session available. Hit your protein goal to unlock full training.', color: '\#f59e0b' },  
+    orange: { text: 'Mobility only today. Eat first, train later.', color: '\#f97316' },  
+    red: { text: 'Rest day recommended. Focus on eating today.', color: '\#ef4444' },  
+  };
+
+  const greeting \= () \=\> {  
+    const h \= new Date().getHours();  
+    if (h \< 12\) return 'Good morning';  
+    if (h \< 18\) return 'Good afternoon';  
+    return 'Good evening';  
+  };
+
+  return (  
+    \<ScrollView  
+      style={styles.container}  
+      refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}  
+    \>  
+      \<View style={styles.header}\>  
+        \<Text style={styles.greeting}\>{greeting()}, {profile?.first\_name}\</Text\>  
+        \<Text style={styles.date}\>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\</Text\>  
+        \<TouchableOpacity onPress={() \=\> navigation.navigate('Settings' as never)} style={styles.gear}\>  
+          \<Text style={{ color: '\#94a3b8', fontSize: 20 }}\>⚙️\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>
+
+      \<View style={styles.card}\>  
+        \<View style={styles.progressRow}\>  
+          \<View style={styles.progressItem}\>  
+            \<Text style={styles.progressLabel}\>Protein\</Text\>  
+            \<Text style={styles.progressValue}\>{Math.round(proteinToday)}g / {Math.round(profile?.protein\_target\_g || 100)}g\</Text\>  
+            \<View style={styles.barBg}\>  
+              \<View style={\[styles.barFill, { width: \`${proteinPct}%\`, backgroundColor: proteinPct \>= 80 ? '\#10b981' : proteinPct \>= 50 ? '\#f59e0b' : '\#f97316' }\]} /\>  
+            \</View\>  
+          \</View\>  
+          \<View style={styles.progressItem}\>  
+            \<Text style={styles.progressLabel}\>Hydration\</Text\>  
+            \<Text style={styles.progressValue}\>{Math.round(hydrationToday)} / {profile?.hydration\_target\_oz || 64}oz\</Text\>  
+            \<View style={styles.barBg}\>  
+              \<View style={\[styles.barFill, { width: \`${hydrationPct}%\`, backgroundColor: '\#0ea5e9' }\]} /\>  
+            \</View\>  
+          \</View\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.card}\>  
+        \<Text style={styles.cardTitle}\>Next Meal\</Text\>  
+        \<Text style={styles.cardBody}\>Greek Yogurt Parfait — 23g protein at 7:00 AM\</Text\>  
+        \<View style={styles.buttonRow}\>  
+          \<TouchableOpacity style={styles.smallButton} onPress={() \=\> {}}\>  
+            \<Text style={styles.smallButtonText}\>I Ate This\</Text\>  
+          \</TouchableOpacity\>  
+          \<TouchableOpacity style={styles.smallButtonOutline} onPress={() \=\> navigation.navigate('Main' as never, { screen: 'Meals' } as never)}\>  
+            \<Text style={styles.smallButtonOutlineText}\>Not feeling this\</Text\>  
+          \</TouchableOpacity\>  
+        \</View\>  
+      \</View\>
+
+      {nudges.length \> 0 && (  
+        \<View style={styles.card}\>  
+          \<Text style={styles.cardTitle}\>Today's Nudges\</Text\>  
+          {nudges.map((n, i) \=\> (  
+            \<View key={i} style={styles.nudgeRow}\>  
+              \<Text style={styles.nudgeText}\>  
+                {n.nudge\_type \=== 'meal\_reminder' ? 'Meal reminder' : n.nudge\_type \=== 'protein\_deficit' ? 'Protein reminder' : n.nudge\_type} sent {new Date(n.sent\_at).toLocaleTimeString(\[\], { hour: '2-digit', minute: '2-digit' })}  
+              \</Text\>  
+              \<Text style={styles.nudgeStatus}\>  
+                {n.action\_taken \=== 'logged' ? '✓ logged' : n.action\_taken \=== 'dismissed' ? 'dismissed' : 'no response'}  
+              \</Text\>  
+            \</View\>  
+          ))}  
+        \</View\>  
+      )}
+
+      \<TouchableOpacity style={styles.card} onPress={() \=\> navigation.navigate('Main' as never, { screen: 'Train' } as never)}\>  
+        \<Text style={styles.cardTitle}\>Today's Training\</Text\>  
+        \<Text style={\[styles.statusText, { color: statusMessages\[workoutStatus\].color }\]}\>  
+          {statusMessages\[workoutStatus\].text}  
+        \</Text\>  
+      \</TouchableOpacity\>
+
+      \<TouchableOpacity style={styles.fab} onPress={() \=\> {}}\>  
+        \<Text style={styles.fabText}\>+\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a' },  
+  header: { padding: 24, paddingTop: 48 },  
+  greeting: { fontSize: 24, fontWeight: 'bold', color: '\#f8fafc' },  
+  date: { fontSize: 14, color: '\#94a3b8', marginTop: 4 },  
+  gear: { position: 'absolute', top: 48, right: 24 },  
+  card: { backgroundColor: '\#1e293b', borderRadius: 16, marginHorizontal: 24, marginBottom: 16, padding: 20 },  
+  cardTitle: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 12 },  
+  cardBody: { fontSize: 14, color: '\#cbd5e1', marginBottom: 16 },  
+  progressRow: { flexDirection: 'row', gap: 20 },  
+  progressItem: { flex: 1 },  
+  progressLabel: { fontSize: 12, color: '\#94a3b8', marginBottom: 4 },  
+  progressValue: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 8 },  
+  barBg: { height: 8, backgroundColor: '\#334155', borderRadius: 4 },  
+  barFill: { height: 8, borderRadius: 4 },  
+  buttonRow: { flexDirection: 'row', gap: 12 },  
+  smallButton: { backgroundColor: '\#0ea5e9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1 },  
+  smallButtonText: { color: '\#f8fafc', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
+  smallButtonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1 },  
+  smallButtonOutlineText: { color: '\#0ea5e9', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
+  nudgeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '\#334155' },  
+  nudgeText: { fontSize: 13, color: '\#cbd5e1', flex: 1 },  
+  nudgeStatus: { fontSize: 13, color: '\#94a3b8' },  
+  statusText: { fontSize: 14, fontWeight: '500' },  
+  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '\#0ea5e9', alignItems: 'center', justifyContent: 'center', shadowColor: '\#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },  
+  fabText: { color: '\#f8fafc', fontSize: 28, fontWeight: '300' },  
+});  
+""")
+
+print("TodayScreen written.")
+
+# MealsScreen
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# MealsScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/MealsScreen.tsx", """import React, { useState, useEffect } from 'react';  
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import mealsData from '../data/meals.json';
+
+const MEALS \= mealsData as any\[\];
+
+export default function MealsScreen() {  
+  const { user } \= useAuth();  
+  const \[textureFilter, setTextureFilter\] \= useState\<string\>('all');  
+  const \[mealTypeFilter, setMealTypeFilter\] \= useState\<string\>('all');  
+  const \[search, setSearch\] \= useState('');  
+  const \[selections, setSelections\] \= useState\<any\[\]\>(\[\]);
+
+  useEffect(() \=\> {  
+    loadSelections();  
+  }, \[\]);
+
+  async function loadSelections() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data } \= await supabase.from('meal\_selections').select('selections').eq('user\_id', user\!.id).eq('week\_start', today).single();  
+    if (data) setSelections(data.selections);  
+  }
+
+  const filteredMeals \= MEALS.filter(m \=\> {  
+    if (textureFilter \!== 'all' && \!m.texture.includes(textureFilter)) return false;  
+    if (mealTypeFilter \!== 'all' && \!m.meal\_types.includes(mealTypeFilter)) return false;  
+    if (search && \!m.name.toLowerCase().includes(search.toLowerCase())) return false;  
+    return true;  
+  });
+
+  return (  
+    \<ScrollView style={styles.container}\>  
+      \<Text style={styles.header}\>Meal Library\</Text\>  
+      \<TextInput style={styles.search} placeholder="Search meals..." placeholderTextColor="\#64748b" value={search} onChangeText={setSearch} /\>  
+      \<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}\>  
+        {\['all', 'liquid', 'soft', 'standard'\].map(t \=\> (  
+          \<TouchableOpacity key={t} style={\[styles.filterChip, textureFilter \=== t && styles.filterActive\]} onPress={() \=\> setTextureFilter(t)}\>  
+            \<Text style={styles.filterText}\>{t}\</Text\>  
+          \</TouchableOpacity\>  
+        ))}  
+      \</ScrollView\>  
+      \<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}\>  
+        {\['all', 'breakfast', 'lunch', 'dinner', 'snack'\].map(t \=\> (  
+          \<TouchableOpacity key={t} style={\[styles.filterChip, mealTypeFilter \=== t && styles.filterActive\]} onPress={() \=\> setMealTypeFilter(t)}\>  
+            \<Text style={styles.filterText}\>{t}\</Text\>  
+          \</TouchableOpacity\>  
+        ))}  
+      \</ScrollView\>  
+      {filteredMeals.map(meal \=\> (  
+        \<View key={meal.id} style={styles.mealCard}\>  
+          \<Text style={styles.mealName}\>{meal.name}\</Text\>  
+          \<View style={styles.mealMeta}\>  
+            \<Text style={styles.mealMetaText}\>{meal.protein\_g}g protein\</Text\>  
+            \<Text style={styles.mealMetaText}\>{meal.calories} cal\</Text\>  
+            \<Text style={styles.mealMetaText}\>{meal.prep\_time\_min} min\</Text\>  
+          \</View\>  
+          \<View style={styles.textureRow}\>  
+            {meal.texture.map((t: string) \=\> (  
+              \<View key={t} style={styles.badge}\>\<Text style={styles.badgeText}\>{t}\</Text\>\</View\>  
+            ))}  
+          \</View\>  
+        \</View\>  
+      ))}  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 16 },  
+  search: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 14, color: '\#f8fafc', fontSize: 16, marginBottom: 12 },  
+  filters: { marginBottom: 12 },  
+  filterChip: { backgroundColor: '\#1e293b', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginRight: 8 },  
+  filterActive: { backgroundColor: '\#0ea5e9' },  
+  filterText: { color: '\#f8fafc', fontSize: 13 },  
+  mealCard: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 16, marginBottom: 12 },  
+  mealName: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 8 },  
+  mealMeta: { flexDirection: 'row', gap: 16, marginBottom: 8 },  
+  mealMetaText: { fontSize: 13, color: '\#94a3b8' },  
+  textureRow: { flexDirection: 'row', gap: 8 },  
+  badge: { backgroundColor: '\#0f172a', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },  
+  badgeText: { fontSize: 11, color: '\#0ea5e9' },  
+});  
+""")
+
+print("MealsScreen written.")
+
+# TrainScreen
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# TrainScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/TrainScreen.tsx", """import React, { useEffect, useState, useCallback } from 'react';  
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';  
+import workoutData from '../data/workouts.json';  
+import { useFocusEffect } from '@react-navigation/native';
+
+function calcFuelStatus(proteinConsumedG: number, proteinTargetG: number, lastLoggedAt: Date | null): 'green' | 'yellow' | 'orange' | 'red' {  
+  const hoursSinceLog \= lastLoggedAt ? (Date.now() \- lastLoggedAt.getTime()) / 3600000 : 24;  
+  const pct \= proteinConsumedG / proteinTargetG;  
+  if (pct \>= 0.8 && hoursSinceLog \<= 4\) return 'green';  
+  if (pct \>= 0.5 && hoursSinceLog \<= 6\) return 'yellow';  
+  if (pct \>= 0.3 && hoursSinceLog \<= 12\) return 'orange';  
+  return 'red';  
+}
+
+export default function TrainScreen() {  
+  const { user } \= useAuth();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[proteinToday, setProteinToday\] \= useState(0);  
+  const \[fuelStatus, setFuelStatus\] \= useState\<'green' | 'yellow' | 'orange' | 'red'\>('red');  
+  const \[todayWorkout, setTodayWorkout\] \= useState\<any\>(null);  
+  const \[refreshing, setRefreshing\] \= useState(false);
+
+  useFocusEffect(  
+    useCallback(() \=\> {  
+      loadData();  
+    }, \[\])  
+  );
+
+  async function loadData() {  
+    const today \= new Date().toISOString().split('T')\[0\];  
+    const { data: profileData } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    setProfile(profileData);
+
+    const { data: proteinLogs } \= await supabase.from('protein\_logs').select('amount\_g, logged\_at').eq('user\_id', user\!.id).gte('logged\_at', today).order('logged\_at', { ascending: false });  
+    const proteinSum \= (proteinLogs || \[\]).reduce((s, l) \=\> s \+ l.amount\_g, 0);  
+    setProteinToday(proteinSum);
+
+    const lastLog \= proteinLogs && proteinLogs.length \> 0 ? new Date(proteinLogs\[0\].logged\_at) : null;  
+    const status \= calcFuelStatus(proteinSum, profileData?.protein\_target\_g || 100, lastLog);  
+    setFuelStatus(status);
+
+    const startDate \= new Date(profileData?.created\_at || new Date());  
+    const daysDiff \= Math.floor((Date.now() \- startDate.getTime()) / (1000 \* 60 \* 60 \* 24));  
+    const dayNumber \= (daysDiff % 3\) \+ 1;  
+    const tier \= profileData?.tier || 'glp1';  
+    setTodayWorkout((workoutData as any)\[tier\]?.\[\`day${dayNumber}\`\]);
+
+    // Only insert workout log if none exists for today  
+    const { data: existing } \= await supabase.from('workout\_logs').select('id').eq('user\_id', user\!.id).eq('scheduled\_for', today).single();  
+    if (\!existing) {  
+      await supabase.from('workout\_logs').insert({  
+        user\_id: user\!.id,  
+        scheduled\_for: today,  
+        day\_number: dayNumber,  
+        fuel\_status: status,  
+        protein\_at\_start\_g: proteinSum,  
+        status: status \=== 'red' ? 'skipped\_underfueled' : 'scheduled',  
+      });  
+    }  
+  }
+
+  const onRefresh \= async () \=\> {  
+    setRefreshing(true);  
+    await loadData();  
+    setRefreshing(false);  
+  };
+
+  const mobilityExercises \= \[  
+    { name: 'Cat-Cow', reps: '10 breaths', cue: 'Move slowly with your breath' },  
+    { name: 'Hip Circles', reps: '10 each direction', cue: 'Wide stance, big circles' },  
+    { name: 'Thoracic Rotation', reps: '10 each side', cue: 'Open chest to ceiling' },  
+    { name: 'Deep Squat Hold', reps: '60 seconds', cue: 'Heels down, chest up' },  
+    { name: 'Couch Stretch', reps: '90 seconds each leg', cue: 'Squeeze glute, push hips forward' },  
+  \];
+
+  if (fuelStatus \=== 'red') {  
+    return (  
+      \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+        \<Text style={styles.header}\>Rest Day Recommended\</Text\>  
+        \<Text style={styles.body}\>Your body needs fuel before it needs training. Eating today is the workout.\</Text\>  
+        \<Text style={styles.proteinStatus}\>You've logged {Math.round(proteinToday)}g of {Math.round(profile?.protein\_target\_g || 100)}g protein goal\</Text\>  
+        \<TouchableOpacity style={styles.button} onPress={() \=\> {}}\>  
+          \<Text style={styles.buttonText}\>Log Protein Now\</Text\>  
+        \</TouchableOpacity\>  
+        \<TouchableOpacity style={styles.buttonOutline} onPress={() \=\> {}}\>  
+          \<Text style={styles.buttonOutlineText}\>Reschedule Workout\</Text\>  
+        \</TouchableOpacity\>  
+      \</ScrollView\>  
+    );  
+  }
+
+  if (fuelStatus \=== 'orange') {  
+    return (  
+      \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+        \<Text style={styles.header}\>Mobility Session\</Text\>  
+        \<Text style={styles.body}\>15-minute mobility flow. No equipment needed.\</Text\>  
+        {mobilityExercises.map((ex, i) \=\> (  
+          \<View key={i} style={styles.exerciseCard}\>  
+            \<Text style={styles.exerciseName}\>{ex.name}\</Text\>  
+            \<Text style={styles.exerciseReps}\>{ex.reps}\</Text\>  
+            \<Text style={styles.exerciseCue}\>{ex.cue}\</Text\>  
+          \</View\>  
+        ))}  
+      \</ScrollView\>  
+    );  
+  }
+
+  const isYellow \= fuelStatus \=== 'yellow';  
+  const exercises \= todayWorkout?.exercises || \[\];
+
+  return (  
+    \<ScrollView style={styles.container} refreshControl={\<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="\#0ea5e9" /\>}\>  
+      \<Text style={styles.header}\>{todayWorkout?.name || 'Workout'}\</Text\>  
+      {isYellow && \<Text style={styles.banner}\>Consider a lighter session today — you're at {Math.round((proteinToday / (profile?.protein\_target\_g || 100)) \* 100)}% of your protein goal.\</Text\>}  
+      \<Text style={styles.duration}\>{todayWorkout?.duration\_min || 25} min • {exercises.length} exercises\</Text\>  
+      {exercises.map((ex: any, i: number) \=\> (  
+        \<View key={i} style={styles.exerciseCard}\>  
+          \<Text style={styles.exerciseName}\>{ex.name}\</Text\>  
+          \<Text style={styles.exerciseReps}\>{isYellow ? 2 : ex.sets} sets × {ex.reps}\</Text\>  
+          \<Text style={styles.exerciseCue}\>{ex.cue}\</Text\>  
+          {ex.band\_mod && \<Text style={styles.bandMod}\>Band: {ex.band\_mod}\</Text\>}  
+        \</View\>  
+      ))}  
+      \<TouchableOpacity style={styles.button} onPress={() \=\> {}}\>  
+        \<Text style={styles.buttonText}\>Complete Workout\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  body: { fontSize: 16, color: '\#cbd5e1', lineHeight: 24, marginBottom: 24 },  
+  proteinStatus: { fontSize: 14, color: '\#94a3b8', marginBottom: 24 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  buttonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center' },  
+  buttonOutlineText: { color: '\#0ea5e9', fontSize: 16, fontWeight: '600' },  
+  banner: { backgroundColor: '\#f59e0b20', borderLeftWidth: 4, borderLeftColor: '\#f59e0b', padding: 12, borderRadius: 8, color: '\#f59e0b', fontSize: 14, marginBottom: 16 },  
+  duration: { fontSize: 14, color: '\#94a3b8', marginBottom: 16 },  
+  exerciseCard: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 16, marginBottom: 12 },  
+  exerciseName: { fontSize: 16, fontWeight: '600', color: '\#f8fafc', marginBottom: 4 },  
+  exerciseReps: { fontSize: 14, color: '\#0ea5e9', marginBottom: 4 },  
+  exerciseCue: { fontSize: 13, color: '\#94a3b8', marginBottom: 4 },  
+  bandMod: { fontSize: 12, color: '\#f59e0b', fontStyle: 'italic' },  
+});  
+""")
+
+print("TrainScreen written.")
+
+# GroceryScreen \+ Ondoarding
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# GroceryScreen.tsx (stub \- Phase 5\)  
+write\_file(f"{base}/mobile/src/screens/GroceryScreen.tsx", """import React from 'react';  
+import { View, Text, StyleSheet } from 'react-native';
+
+export default function GroceryScreen() {  
+  return (  
+    \<View style={styles.container}\>  
+      \<Text style={styles.header}\>Grocery List\</Text\>  
+      \<Text style={styles.body}\>Coming soon — auto-generated grocery lists based on your weekly meal plan.\</Text\>  
+    \</View\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center', alignItems: 'center' },  
+  header: { fontSize: 24, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  body: { fontSize: 14, color: '\#94a3b8', textAlign: 'center' },  
+});  
+""")
+
+\# OnboardingScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/OnboardingScreen.tsx", """import React, { useState } from 'react';  
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function OnboardingScreen() {  
+  const { user } \= useAuth();  
+  const \[step, setStep\] \= useState(0);  
+  const \[firstName, setFirstName\] \= useState('');  
+  const \[bodyWeight, setBodyWeight\] \= useState('');  
+  const \[tier, setTier\] \= useState\<'glp1' | 'longevity'\>('glp1');  
+  const \[proteinTarget, setProteinTarget\] \= useState('');  
+  const \[notificationsEnabled, setNotificationsEnabled\] \= useState(true);
+
+  const steps \= \[  
+    'Welcome to Chassis',  
+    'Your Profile',  
+    'Program Selection',  
+    'Protein Target',  
+    'Notifications',  
+    'All Set',  
+  \];
+
+  const handleNext \= () \=\> {  
+    if (step \=== 1 && (\!firstName || \!bodyWeight)) {  
+      Alert.alert('Required', 'Please fill in all fields');  
+      return;  
+    }  
+    if (step \=== 3 && \!proteinTarget) {  
+      Alert.alert('Required', 'Please set a protein target');  
+      return;  
+    }  
+    if (step \< steps.length \- 1\) setStep(step \+ 1);  
+    else completeOnboarding();  
+  };
+
+  const handleBack \= () \=\> {  
+    if (step \> 0\) setStep(step \- 1);  
+  };
+
+  const completeOnboarding \= async () \=\> {  
+    const { error } \= await supabase.from('profiles').upsert({  
+      id: user\!.id,  
+      first\_name: firstName,  
+      body\_weight\_kg: parseFloat(bodyWeight),  
+      tier,  
+      protein\_target\_g: parseFloat(proteinTarget),  
+      onboarding\_complete: true,  
+      notifications\_enabled: notificationsEnabled,  
+    });
+
+    if (error) {  
+      Alert.alert('Error', error.message);  
+    } else {  
+      await supabase.auth.updateUser({  
+        data: { onboarding\_complete: true }  
+      });  
+    }  
+  };
+
+  const renderStep \= () \=\> {  
+    switch (step) {  
+      case 0:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Welcome to Chassis\</Text\>  
+            \<Text style={styles.subtitle}\>Built to keep you eating, moving, and accountable on your GLP-1 journey.\</Text\>  
+          \</\>  
+        );  
+      case 1:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Your Profile\</Text\>  
+            \<TextInput style={styles.input} placeholder="First Name" placeholderTextColor="\#64748b" value={firstName} onChangeText={setFirstName} /\>  
+            \<TextInput style={styles.input} placeholder="Body Weight (kg)" placeholderTextColor="\#64748b" value={bodyWeight} onChangeText={setBodyWeight} keyboardType="numeric" /\>  
+          \</\>  
+        );  
+      case 2:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Program Selection\</Text\>  
+            \<TouchableOpacity style={\[styles.option, tier \=== 'glp1' && styles.optionActive\]} onPress={() \=\> setTier('glp1')}\>  
+              \<Text style={styles.optionText}\>GLP-1 Recovery\</Text\>  
+              \<Text style={styles.optionSub}\>Focus on muscle preservation & nutrition\</Text\>  
+            \</TouchableOpacity\>  
+            \<TouchableOpacity style={\[styles.option, tier \=== 'longevity' && styles.optionActive\]} onPress={() \=\> setTier('longevity')}\>  
+              \<Text style={styles.optionText}\>Longevity\</Text\>  
+              \<Text style={styles.optionSub}\>Zone 2, strength, & metabolic health\</Text\>  
+            \</TouchableOpacity\>  
+          \</\>  
+        );  
+      case 3:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Protein Target\</Text\>  
+            \<Text style={styles.subtitle}\>Daily protein goal in grams\</Text\>  
+            \<TextInput style={styles.input} placeholder="e.g. 120" placeholderTextColor="\#64748b" value={proteinTarget} onChangeText={setProteinTarget} keyboardType="numeric" /\>  
+            \<Text style={styles.hint}\>Recommended: {Math.round(parseFloat(bodyWeight || '0') \* 1.6)}g based on your weight\</Text\>  
+          \</\>  
+        );  
+      case 4:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>Notifications\</Text\>  
+            \<Text style={styles.subtitle}\>Get meal reminders and protein nudges\</Text\>  
+            \<TouchableOpacity style={\[styles.option, notificationsEnabled && styles.optionActive\]} onPress={() \=\> setNotificationsEnabled(true)}\>  
+              \<Text style={styles.optionText}\>Enable Notifications\</Text\>  
+            \</TouchableOpacity\>  
+            \<TouchableOpacity style={\[styles.option, \!notificationsEnabled && styles.optionActive\]} onPress={() \=\> setNotificationsEnabled(false)}\>  
+              \<Text style={styles.optionText}\>Skip for Now\</Text\>  
+            \</TouchableOpacity\>  
+          \</\>  
+        );  
+      case 5:  
+        return (  
+          \<\>  
+            \<Text style={styles.title}\>All Set\!\</Text\>  
+            \<Text style={styles.subtitle}\>You're ready to start your journey with Chassis.\</Text\>  
+          \</\>  
+        );  
+      default:  
+        return null;  
+    }  
+  };
+
+  return (  
+    \<ScrollView contentContainerStyle={styles.container}\>  
+      \<View style={styles.progressBar}\>  
+        \<View style={\[styles.progressFill, { width: \`${((step \+ 1\) / steps.length) \* 100}%\` }\]} /\>  
+      \</View\>  
+      \<View style={styles.content}\>  
+        {renderStep()}  
+      \</View\>  
+      \<View style={styles.buttonRow}\>  
+        {step \> 0 && (  
+          \<TouchableOpacity style={styles.buttonOutline} onPress={handleBack}\>  
+            \<Text style={styles.buttonOutlineText}\>Back\</Text\>  
+          \</TouchableOpacity\>  
+        )}  
+        \<TouchableOpacity style={\[styles.button, step \=== 0 && { flex: 1 }\]} onPress={handleNext}\>  
+          \<Text style={styles.buttonText}\>{step \=== steps.length \- 1 ? 'Get Started' : 'Next'}\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flexGrow: 1, backgroundColor: '\#0f172a', padding: 24, justifyContent: 'center' },  
+  progressBar: { height: 4, backgroundColor: '\#1e293b', borderRadius: 2, marginBottom: 40 },  
+  progressFill: { height: 4, backgroundColor: '\#0ea5e9', borderRadius: 2 },  
+  content: { flex: 1, justifyContent: 'center' },  
+  title: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 12 },  
+  subtitle: { fontSize: 14, color: '\#94a3b8', marginBottom: 24 },  
+  input: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, color: '\#f8fafc', marginBottom: 12, fontSize: 16 },  
+  option: { backgroundColor: '\#1e293b', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '\#334155' },  
+  optionActive: { borderColor: '\#0ea5e9', backgroundColor: '\#0ea5e920' },  
+  optionText: { fontSize: 16, fontWeight: '600', color: '\#f8fafc' },  
+  optionSub: { fontSize: 13, color: '\#94a3b8', marginTop: 4 },  
+  hint: { fontSize: 13, color: '\#64748b', marginTop: 8 },  
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 24 },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', flex: 1 },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  buttonOutline: { borderWidth: 1, borderColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center', flex: 1 },  
+  buttonOutlineText: { color: '\#0ea5e9', fontSize: 16, fontWeight: '600' },  
+});  
+""")
+
+print("GroceryScreen \+ OnboardingScreen written.")
+
+# SettingScreen
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# SettingsScreen.tsx  
+write\_file(f"{base}/mobile/src/screens/SettingsScreen.tsx", """import React, { useState, useEffect } from 'react';  
+import { View, Text, TouchableOpacity, StyleSheet, Switch, Alert, ScrollView } from 'react-native';  
+import { supabase } from '../lib/supabase';  
+import { useAuth } from '../hooks/useAuth';
+
+export default function SettingsScreen() {  
+  const { user, signOut } \= useAuth();  
+  const \[profile, setProfile\] \= useState\<any\>(null);  
+  const \[notifications, setNotifications\] \= useState(true);
+
+  useEffect(() \=\> {  
+    loadProfile();  
+  }, \[\]);
+
+  async function loadProfile() {  
+    const { data } \= await supabase.from('profiles').select('\*').eq('id', user\!.id).single();  
+    if (data) {  
+      setProfile(data);  
+      setNotifications(data.notifications\_enabled ?? true);  
+    }  
+  }
+
+  async function toggleNotifications(value: boolean) {  
+    setNotifications(value);  
+    await supabase.from('profiles').update({ notifications\_enabled: value }).eq('id', user\!.id);  
+  }
+
+  async function handleSignOut() {  
+    await signOut();  
+  }
+
+  async function manageSubscription() {  
+    const { data, error } \= await supabase.functions.invoke('create-checkout-session', {  
+      body: { user\_id: user\!.id },  
+    });  
+    if (data?.url) {  
+      Alert.alert('Subscription', 'Stripe checkout URL: ' \+ data.url);  
+    }  
+  }
+
+  return (  
+    \<ScrollView style={styles.container}\>  
+      \<Text style={styles.header}\>Settings\</Text\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Profile\</Text\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Name\</Text\>  
+          \<Text style={styles.value}\>{profile?.first\_name || '—'}\</Text\>  
+        \</View\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Tier\</Text\>  
+          \<Text style={styles.value}\>{profile?.tier || '—'}\</Text\>  
+        \</View\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Protein Target\</Text\>  
+          \<Text style={styles.value}\>{profile?.protein\_target\_g ? \`${profile.protein\_target\_g}g\` : '—'}\</Text\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Preferences\</Text\>  
+        \<View style={styles.row}\>  
+          \<Text style={styles.label}\>Push Notifications\</Text\>  
+          \<Switch value={notifications} onValueChange={toggleNotifications} trackColor={{ false: '\#334155', true: '\#0ea5e9' }} /\>  
+        \</View\>  
+      \</View\>
+
+      \<View style={styles.section}\>  
+        \<Text style={styles.sectionTitle}\>Subscription\</Text\>  
+        \<TouchableOpacity style={styles.button} onPress={manageSubscription}\>  
+          \<Text style={styles.buttonText}\>Manage Subscription\</Text\>  
+        \</TouchableOpacity\>  
+      \</View\>
+
+      \<TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}\>  
+        \<Text style={styles.signOutText}\>Sign Out\</Text\>  
+      \</TouchableOpacity\>  
+    \</ScrollView\>  
+  );  
+}
+
+const styles \= StyleSheet.create({  
+  container: { flex: 1, backgroundColor: '\#0f172a', padding: 24 },  
+  header: { fontSize: 28, fontWeight: 'bold', color: '\#f8fafc', marginBottom: 24 },  
+  section: { backgroundColor: '\#1e293b', borderRadius: 16, padding: 20, marginBottom: 16 },  
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: '\#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },  
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '\#334155' },  
+  label: { fontSize: 16, color: '\#f8fafc' },  
+  value: { fontSize: 16, color: '\#94a3b8' },  
+  button: { backgroundColor: '\#0ea5e9', borderRadius: 12, padding: 16, alignItems: 'center' },  
+  buttonText: { color: '\#f8fafc', fontSize: 16, fontWeight: '600' },  
+  signOutButton: { marginTop: 24, padding: 16, alignItems: 'center' },  
+  signOutText: { color: '\#ef4444', fontSize: 16, fontWeight: '600' },  
+});  
+""")
+
+print("SettingsScreen written.")
+
+# MobileConfig
+
+import os, json
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# \============================================================  
+\# MOBILE CONFIG FILES  
+\# \============================================================
+
+mobile\_pkg \= {  
+    "name": "chassis-mobile",  
+    "version": "1.0.0",  
+    "main": "expo/AppEntry.js",  
+    "scripts": {  
+        "start": "expo start",  
+        "android": "expo start \--android",  
+        "ios": "expo start \--ios",  
+        "web": "expo start \--web"  
+    },  
+    "dependencies": {  
+        "expo": "\~50.0.0",  
+        "expo-status-bar": "\~1.11.0",  
+        "expo-notifications": "\~0.27.0",  
+        "expo-device": "\~5.9.0",  
+        "expo-av": "\~13.10.0",  
+        "expo-web-browser": "\~12.8.0",  
+        "expo-haptics": "\~12.8.0",  
+        "react": "18.2.0",  
+        "react-native": "0.73.0",  
+        "@react-navigation/native": "^6.1.0",  
+        "@react-navigation/bottom-tabs": "^6.5.0",  
+        "@react-navigation/native-stack": "^6.9.0",  
+        "react-native-safe-area-context": "4.8.0",  
+        "react-native-screens": "\~3.29.0",  
+        "@supabase/supabase-js": "^2.39.0",  
+        "@react-native-async-storage/async-storage": "1.21.0",  
+        "react-native-url-polyfill": "^2.0.0",  
+        "@expo/vector-icons": "^14.0.0",  
+        "@react-native-community/slider": "^4.5.0"  
+    },  
+    "devDependencies": {  
+        "@babel/core": "^7.20.0",  
+        "@types/react": "\~18.2.0",  
+        "typescript": "^5.1.0"  
+    }  
+}
+
+with open(f"{base}/mobile/package.json", "w") as f:  
+    json.dump(mobile\_pkg, f, indent=2)
+
+mobile\_tsconfig \= {  
+    "extends": "expo/tsconfig.base",  
+    "compilerOptions": {  
+        "strict": True,  
+        "jsx": "react-native",  
+        "esModuleInterop": True,  
+        "skipLibCheck": True,  
+        "forceConsistentCasingInFileNames": True,  
+        "resolveJsonModule": True  
+    },  
+    "include": \["\*\*/\*.ts", "\*\*/\*.tsx"\]  
+}
+
+with open(f"{base}/mobile/tsconfig.json", "w") as f:  
+    json.dump(mobile\_tsconfig, f, indent=2)
+
+print("Mobile config files written.")
+
+# ClinicLib \+ App
+
+import os
+
+base \= "/mnt/agents/output/chassis"
+
+def write\_file(path, content):  
+    os.makedirs(os.path.dirname(path), exist\_ok=True)  
+    with open(path, "w") as f:  
+        f.write(content)  
+    return path
+
+\# \============================================================  
+\# CLINIC DASHBOARD FILES  
+\# \============================================================
+
+\# clinic-dashboard/src/lib/supabase.ts  
+write\_file(f"{base}/clinic-dashboard/src/lib/supabase.ts", """import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl \= process.env.REACT\_APP\_SUPABASE\_URL || 'https://your-project.supabase.co';  
+const supabaseAnonKey \= process.env.REACT\_APP\_SUPABASE\_ANON\_KEY || 'your-anon-key';
+
+export const supabase \= createClient(supabaseUrl, supabaseAnonKey);  
+""")
+
+\# clinic-dashboard/src/App.tsx  
+write\_file(f"{base}/clinic-dashboard/src/App.tsx", """import React, { useEffect, useState } from 'react';  
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';  
+import { supabase } from './lib/supabase';  
+import LoginPage from './pages/LoginPage';  
+import PatientPanel from './pages/PatientPanel';  
+import PatientDetail from './pages/PatientDetail';  
+import ClinicSettings from './pages/ClinicSettings';
+
+function App() {  
+  const \[session, setSession\] \= useState\<any\>(null);  
+  const \[clinicUser, setClinicUser\] \= useState\<any\>(null);  
+  const \[loading, setLoading\] \= useState(true);
+
+  useEffect(() \=\> {  
+    supabase.auth.getSession().then(({ data: { session } }) \=\> {  
+      setSession(session);  
+      if (session?.user) checkClinicUser(session.user.id);  
+      else setLoading(false);  
+    });
+
+    const { data: listener } \= supabase.auth.onAuthStateChange((\_event, session) \=\> {  
+      setSession(session);  
+      if (session?.user) checkClinicUser(session.user.id);  
+      else { setClinicUser(null); setLoading(false); }  
+    });
+
+    return () \=\> listener.subscription.unsubscribe();  
+  }, \[\]);
+
+  async function checkClinicUser(userId: string) {  
+    const { data, error } \= await supabase.from('clinic\_users').select('\*, clinics(\*)').eq('id', userId).single();  
+    if (error || \!data) {  
+      await supabase.auth.signOut();  
+      setClinicUser(null);  
+    } else {  
+      setClinicUser(data);  
+    }  
+    setLoading(false);  
+  }
+
+  if (loading) return \<div style={{ background: '\#0f172a', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '\#f8fafc' }}\>Loading...\</div\>;
+
+  return (  
+    \<BrowserRouter\>  
+      {\!session ? (  
+        \<Routes\>\<Route path="\*" element={\<LoginPage /\>} /\>\</Routes\>  
+      ) : \!clinicUser ? (  
+        \<Routes\>\<Route path="\*" element={\<div style={{ padding: 40, textAlign: 'center' }}\>Access not authorized\</div\>} /\>\</Routes\>  
+      ) : (  
+        \<Routes\>  
+          \<Route path="/" element={\<PatientPanel clinicUser={clinicUser} /\>} /\>  
+          \<Route path="/patient/:id" element={\<PatientDetail clinicUser={clinicUser} /\>} /\>  
+          \<Route path="/settings" element={\<ClinicSettings clinicUser={clinicUser} /\>} /\>  
+          \<Route path="\*" element={\<Navigate to="/" /\>} /\>  
+        \</Routes\>  
+      )}  
+    \</BrowserRouter\>  
+  );  
+}
+
+export default App;  
+""")
+
+print("Clinic lib \+ App written.")
