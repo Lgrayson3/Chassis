@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 export default function TodayScreen() {  
   const { user } = useAuth();  
-  const navigation = useNavigation();  
+  const navigation = useNavigation<any>();  
   const [profile, setProfile] = useState<any>(null);  
   const [proteinToday, setProteinToday] = useState(0);  
   const [hydrationToday, setHydrationToday] = useState(0);  
@@ -78,7 +78,7 @@ export default function TodayScreen() {
       <View style={styles.header}>  
         <Text style={styles.greeting}>{greeting()}, {profile?.first_name}</Text>  
         <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>  
-        <TouchableOpacity onPress={() => navigation.navigate('Settings' as never)} style={styles.gear}>  
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.gear}>  
           <Text style={{ color: '#94a3b8', fontSize: 20 }}>⚙️</Text>  
         </TouchableOpacity>  
       </View>
@@ -109,7 +109,7 @@ export default function TodayScreen() {
           <TouchableOpacity style={styles.smallButton} onPress={() => {}}>  
             <Text style={styles.smallButtonText}>I Ate This</Text>  
           </TouchableOpacity>  
-          <TouchableOpacity style={styles.smallButtonOutline} onPress={() => navigation.navigate('Main' as never, { screen: 'Meals' } as never)}>  
+          <TouchableOpacity style={styles.smallButtonOutline} onPress={() => navigation.navigate('Main', { screen: 'Meals' })}>  
             <Text style={styles.smallButtonOutlineText}>Not feeling this</Text>  
           </TouchableOpacity>  
         </View>  
@@ -131,7 +131,7 @@ export default function TodayScreen() {
         </View>  
       )}
 
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Main' as never, { screen: 'Train' } as never)}>  
+      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Main', { screen: 'Train' })}>  
         <Text style={styles.cardTitle}>Today's Training</Text>  
         <Text style={[styles.statusText, { color: statusMessages[workoutStatus].color }]}>  
           {statusMessages[workoutStatus].text}  
