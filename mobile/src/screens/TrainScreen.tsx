@@ -6,11 +6,11 @@ import workoutData from '../data/workouts.json';
 import { useFocusEffect } from '@react-navigation/native';
 
 function calcFuelStatus(proteinConsumedG: number, proteinTargetG: number, lastLoggedAt: Date | null): 'green' | 'yellow' | 'orange' | 'red' {  
-  const hoursSinceLog = lastLoggedAt ? (Date.now() \- lastLoggedAt.getTime()) / 3600000 : 24;  
+  const hoursSinceLog = lastLoggedAt ? (Date.now() - lastLoggedAt.getTime()) / 3600000 : 24;  
   const pct = proteinConsumedG / proteinTargetG;  
-  if (pct >= 0.8 && hoursSinceLog <= 4\) return 'green';  
-  if (pct >= 0.5 && hoursSinceLog <= 6\) return 'yellow';  
-  if (pct >= 0.3 && hoursSinceLog <= 12\) return 'orange';  
+  if (pct >= 0.8 && hoursSinceLog <= 4) return 'green';  
+  if (pct >= 0.5 && hoursSinceLog <= 6) return 'yellow';  
+  if (pct >= 0.3 && hoursSinceLog <= 12) return 'orange';  
   return 'red';  
 }
 
@@ -42,10 +42,10 @@ export default function TrainScreen() {
     setFuelStatus(status);
 
     const startDate = new Date(profileData?.created_at || new Date());  
-    const daysDiff = Math.floor((Date.now() \- startDate.getTime()) / (1000 * 60 * 60 * 24));  
-    const dayNumber = (daysDiff % 3\) + 1;  
+    const daysDiff = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));  
+    const dayNumber = (daysDiff % 3) + 1;  
     const tier = profileData?.tier || 'glp1';  
-    setTodayWorkout((workoutData as any)[tier]?.[\`day${dayNumber}\`]);
+    setTodayWorkout((workoutData as any)[tier]?.[`day${dayNumber}`]);
 
     // Only insert workout log if none exists for today  
     const { data: existing } = await supabase.from('workout_logs').select('id').eq('user_id', user!.id).eq('scheduled_for', today).single();  

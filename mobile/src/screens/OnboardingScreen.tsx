@@ -30,12 +30,12 @@ export default function OnboardingScreen() {
       Alert.alert('Required', 'Please set a protein target');  
       return;  
     }  
-    if (step < steps.length \- 1\) setStep(step + 1);  
+    if (step < steps.length - 1) setStep(step + 1);  
     else completeOnboarding();  
   };
 
   const handleBack = () => {  
-    if (step > 0\) setStep(step \- 1);  
+    if (step > 0) setStep(step - 1);  
   };
 
   const completeOnboarding = async () => {  
@@ -126,7 +126,7 @@ export default function OnboardingScreen() {
   return (  
     <ScrollView contentContainerStyle={styles.container}>  
       <View style={styles.progressBar}>  
-        <View style={[styles.progressFill, { width: \`${((step + 1\) / steps.length) * 100}%\` }]} />  
+        <View style={[styles.progressFill, { width: `${((step + 1) / steps.length) * 100}%` }]} />  
       </View>  
       <View style={styles.content}>  
         {renderStep()}  
@@ -138,7 +138,7 @@ export default function OnboardingScreen() {
           </TouchableOpacity>  
         )}  
         <TouchableOpacity style={[styles.button, step === 0 && { flex: 1 }]} onPress={handleNext}>  
-          <Text style={styles.buttonText}>{step === steps.length \- 1 ? 'Get Started' : 'Next'}</Text>  
+          <Text style={styles.buttonText}>{step === steps.length - 1 ? 'Get Started' : 'Next'}</Text>  
         </TouchableOpacity>  
       </View>  
     </ScrollView>  

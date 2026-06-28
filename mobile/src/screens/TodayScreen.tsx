@@ -39,11 +39,11 @@ export default function TodayScreen() {
     const target = profileData?.protein_target_g || 100;  
     const pct = proteinSum / target;  
     const lastLog = proteinLogs && proteinLogs.length > 0 ? new Date(proteinLogs[0].logged_at) : null;  
-    const hoursSince = lastLog ? (Date.now() \- lastLog.getTime()) / 3600000 : 24;
+    const hoursSince = lastLog ? (Date.now() - lastLog.getTime()) / 3600000 : 24;
 
-    if (pct >= 0.8 && hoursSince <= 4\) setWorkoutStatus('green');  
-    else if (pct >= 0.5 && hoursSince <= 6\) setWorkoutStatus('yellow');  
-    else if (pct >= 0.3 && hoursSince <= 12\) setWorkoutStatus('orange');  
+    if (pct >= 0.8 && hoursSince <= 4) setWorkoutStatus('green');  
+    else if (pct >= 0.5 && hoursSince <= 6) setWorkoutStatus('yellow');  
+    else if (pct >= 0.3 && hoursSince <= 12) setWorkoutStatus('orange');  
     else setWorkoutStatus('red');  
   }
 
@@ -65,8 +65,8 @@ export default function TodayScreen() {
 
   const greeting = () => {  
     const h = new Date().getHours();  
-    if (h < 12\) return 'Good morning';  
-    if (h < 18\) return 'Good afternoon';  
+    if (h < 12) return 'Good morning';  
+    if (h < 18) return 'Good afternoon';  
     return 'Good evening';  
   };
 
@@ -89,14 +89,14 @@ export default function TodayScreen() {
             <Text style={styles.progressLabel}>Protein</Text>  
             <Text style={styles.progressValue}>{Math.round(proteinToday)}g / {Math.round(profile?.protein_target_g || 100)}g</Text>  
             <View style={styles.barBg}>  
-              <View style={[styles.barFill, { width: \`${proteinPct}%\`, backgroundColor: proteinPct >= 80 ? '#10b981' : proteinPct >= 50 ? '#f59e0b' : '#f97316' }]} />  
+              <View style={[styles.barFill, { width: `${proteinPct}%`, backgroundColor: proteinPct >= 80 ? '#10b981' : proteinPct >= 50 ? '#f59e0b' : '#f97316' }]} />  
             </View>  
           </View>  
           <View style={styles.progressItem}>  
             <Text style={styles.progressLabel}>Hydration</Text>  
             <Text style={styles.progressValue}>{Math.round(hydrationToday)} / {profile?.hydration_target_oz || 64}oz</Text>  
             <View style={styles.barBg}>  
-              <View style={[styles.barFill, { width: \`${hydrationPct}%\`, backgroundColor: '#0ea5e9' }]} />  
+              <View style={[styles.barFill, { width: `${hydrationPct}%`, backgroundColor: '#0ea5e9' }]} />  
             </View>  
           </View>  
         </View>  

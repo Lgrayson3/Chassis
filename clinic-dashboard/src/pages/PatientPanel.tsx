@@ -57,7 +57,7 @@ export default function PatientPanel({ clinicUser }: { clinicUser: any }) {
             {patients.map(p => (  
               <tr key={p.id} style={{ borderBottom: '1px solid #334155' }}>  
                 <td style={{ padding: '16px 24px' }}>  
-                  <Link to={\`/patient/${p.id}\`} style={{ color: '#0ea5e9', textDecoration: 'none', fontWeight: 600 }}>  
+                  <Link to={`/patient/${p.id}`} style={{ color: '#0ea5e9', textDecoration: 'none', fontWeight: 600 }}>  
                     {p.first_name || 'Unnamed'}  
                   </Link>  
                   <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>Started {new Date(p.created_at).toLocaleDateString()}</div>  

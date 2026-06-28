@@ -19,7 +19,7 @@ export default function PatientDetail({ clinicUser }: { clinicUser: any }) {
     setPatient(profile);
 
     const today = new Date().toISOString().split('T')[0];  
-    const thirtyDaysAgo = new Date(Date.now() \- 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const { data: proteinLogs } = await supabase  
       .from('protein_logs')  
@@ -30,15 +30,15 @@ export default function PatientDetail({ clinicUser }: { clinicUser: any }) {
     const dailyMap: Record<string, number> = {};  
     for (const log of (proteinLogs || [])) {  
       const day = log.logged_at.split('T')[0];  
-      dailyMap[day] = (dailyMap[day] || 0\) + log.amount_g;  
+      dailyMap[day] = (dailyMap[day] || 0) + log.amount_g;  
     }
 
     const chart = Object.entries(dailyMap).map(([day, amount]) => {  
       const pct = profile.protein_target_g ? (amount / profile.protein_target_g) * 100 : 0;  
       let color = '#ef4444';  
-      if (pct >= 100\) color = '#10b981';  
-      else if (pct >= 50\) color = '#f59e0b';  
-      else if (pct >= 30\) color = '#f97316';  
+      if (pct >= 100) color = '#10b981';  
+      else if (pct >= 50) color = '#f59e0b';  
+      else if (pct >= 30) color = '#f97316';  
       return { day: day.slice(5), amount: Math.round(pct), color };  
     }).slice(-30);
 
@@ -100,11 +100,11 @@ export default function PatientDetail({ clinicUser }: { clinicUser: any }) {
         <ResponsiveContainer width="100%" height={240}>  
           <BarChart data={chartData}>  
             <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 12 }} />  
-            <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} label={{ value: '% of target', fill: '#94a3b8', angle: \-90, position: 'insideLeft' }} />  
+            <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} label={{ value: '% of target', fill: '#94a3b8', angle: -90, position: 'insideLeft' }} />  
             <Tooltip contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 8, color: '#f8fafc' }} />  
             <Bar dataKey="amount" radius={[4, 4, 0, 0]}>  
               {chartData.map((entry, index) => (  
-                <Cell key={\`cell-${index}\`} fill={entry.color} />  
+                <Cell key={`cell-${index}`} fill={entry.color} />  
               ))}  
             </Bar>  
           </BarChart>  

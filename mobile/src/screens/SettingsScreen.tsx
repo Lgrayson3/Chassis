@@ -54,7 +54,7 @@ export default function SettingsScreen() {
         </View>  
         <View style={styles.row}>  
           <Text style={styles.label}>Protein Target</Text>  
-          <Text style={styles.value}>{profile?.protein_target_g ? \`${profile.protein_target_g}g\` : '—'}</Text>  
+          <Text style={styles.value}>{profile?.protein_target_g ? `${profile.protein_target_g}g` : '—'}</Text>  
         </View>  
       </View>
 

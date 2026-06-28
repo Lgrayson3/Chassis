@@ -78,7 +78,7 @@ export default function ClinicSettings({ clinicUser }: { clinicUser: any }) {
               https://app.chassis.health/join?code={referralCode}  
             </span>  
             <button   
-              onClick={() => copyToClipboard(\`https://app.chassis.health/join?code=${referralCode}\`)}  
+              onClick={() => copyToClipboard(`https://app.chassis.health/join?code=${referralCode}`)}  
               style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#334155', color: '#f8fafc', cursor: 'pointer' }}  
             >  
               Copy link  
