@@ -8,7 +8,11 @@
       "backgroundColor": "#0f172a"
     },
     "android": {
-      "package": "health.chassis.app"
+      "package": "health.chassis.app",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
     },
     "ios": {
       "bundleIdentifier": "health.chassis.app"
