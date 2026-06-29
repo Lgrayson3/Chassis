@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import workoutData from '../data/workouts.json';  
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import LogBottomSheet from '../components/LogBottomSheet';
+import { trackEvent } from '../lib/analytics';
 
 function calcFuelStatus(proteinConsumedG: number, proteinTargetG: number, lastLoggedAt: Date | null): 'green' | 'yellow' | 'orange' | 'red' {  
   const hoursSinceLog = lastLoggedAt ? (Date.now() - lastLoggedAt.getTime()) / 3600000 : 24;  
@@ -34,7 +35,16 @@ export default function TrainScreen() {
   useFocusEffect(  
     useCallback(() => {  
       loadData();  
-    }, [])  
+      
+      return () => {
+        if (fuelStatus === 'red') {
+          trackEvent('workout_skipped', {
+            fuel_status: 'red',
+            protein_at_time: proteinToday
+          });
+        }
+      };
+    }, [fuelStatus, proteinToday])  
   );
 
   async function loadData() {  
@@ -110,6 +120,16 @@ export default function TrainScreen() {
         Alert.alert('Error completing workout', error.message);
         return;
       }
+
+      // Track analytics event
+      const startDate = new Date(profile?.created_at || new Date());  
+      const daysDiff = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));  
+      const dayNumber = (daysDiff % 3) + 1;
+      await trackEvent('workout_completed', {
+        day_number: dayNumber,
+        fuel_status: fuelStatus,
+        duration_min: todayWorkout?.duration_min || 25
+      });
 
       setWorkoutComplete(true);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import mealsData from '../data/meals.json';
+import { trackEvent } from '../lib/analytics';
 
 interface LogBottomSheetProps {
   visible: boolean;
@@ -162,6 +163,13 @@ export default function LogBottomSheet({ visible, onDismiss, onLogged, defaultTa
         return;
       }
 
+      // Track analytics event
+      await trackEvent('protein_logged', {
+        grams,
+        source,
+        meal_id: mealId ? String(mealId) : null
+      });
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       
       // Update checkmark state if it was a selection meal
@@ -209,6 +217,11 @@ export default function LogBottomSheet({ visible, onDismiss, onLogged, defaultTa
         Alert.alert('Error', error.message);
         return;
       }
+
+      // Track analytics event
+      await trackEvent('hydration_logged', {
+        oz
+      });
 
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       onLogged();
