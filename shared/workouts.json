@@ -1,0 +1,211 @@
+{
+  "glp1": {
+    "day1": {
+      "name": "Full Body Strength A",
+      "duration_min": 30,
+      "exercises": [
+        {
+          "name": "Goblet Squats",
+          "sets": 3,
+          "reps": "10-12",
+          "cue": "Chest up, sit back",
+          "band_mod": "Light band above knees"
+        },
+        {
+          "name": "Push-Ups (Incline)",
+          "sets": 3,
+          "reps": "8-12",
+          "cue": "Body in straight line"
+        },
+        {
+          "name": "Single-Leg RDL",
+          "sets": 3,
+          "reps": "10 each",
+          "cue": "Hinge at hips, soft knee"
+        },
+        {
+          "name": "Bent Over Row",
+          "sets": 3,
+          "reps": "10-12",
+          "cue": "Squeeze shoulder blades"
+        },
+        {
+          "name": "Plank",
+          "sets": 3,
+          "reps": "30-45 sec",
+          "cue": "Brace core, breathe"
+        }
+      ]
+    },
+    "day2": {
+      "name": "Cardio & Core",
+      "duration_min": 25,
+      "exercises": [
+        {
+          "name": "Brisk Walk / Incline Treadmill",
+          "sets": 1,
+          "reps": "15 min",
+          "cue": "Conversational pace"
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 3,
+          "reps": "10 each side",
+          "cue": "Lower back pressed to floor"
+        },
+        {
+          "name": "Bird Dog",
+          "sets": 3,
+          "reps": "10 each side",
+          "cue": "Slow and controlled"
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 3,
+          "reps": "15",
+          "cue": "Squeeze glutes at top"
+        },
+        {
+          "name": "Side Plank",
+          "sets": 2,
+          "reps": "20 sec each",
+          "cue": "Hips stacked"
+        }
+      ]
+    },
+    "day3": {
+      "name": "Full Body Strength B",
+      "duration_min": 30,
+      "exercises": [
+        {
+          "name": "Romanian Deadlift",
+          "sets": 3,
+          "reps": "10-12",
+          "cue": "Hips back, flat back"
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": "10-12",
+          "cue": "Core tight, no arch"
+        },
+        {
+          "name": "Split Squat",
+          "sets": 3,
+          "reps": "10 each",
+          "cue": "Torso upright"
+        },
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": "10-12",
+          "cue": "Pull to chest, control negative"
+        },
+        {
+          "name": "Farmer Carry",
+          "sets": 3,
+          "reps": "30 sec",
+          "cue": "Shoulders down, walk tall"
+        }
+      ]
+    }
+  },
+  "longevity": {
+    "day1": {
+      "name": "Zone 2 + Mobility",
+      "duration_min": 40,
+      "exercises": [
+        {
+          "name": "Zone 2 Cycling / Walking",
+          "sets": 1,
+          "reps": "30 min",
+          "cue": "Nose breathing only"
+        },
+        {
+          "name": "World's Greatest Stretch",
+          "sets": 2,
+          "reps": "5 each side",
+          "cue": "Breathe into stretch"
+        },
+        {
+          "name": "90/90 Hip Switch",
+          "sets": 2,
+          "reps": "10 each side",
+          "cue": "Keep heels down"
+        },
+        {
+          "name": "Thoracic Bridge",
+          "sets": 2,
+          "reps": "5",
+          "cue": "Open chest to ceiling"
+        }
+      ]
+    },
+    "day2": {
+      "name": "Strength & Stability",
+      "duration_min": 35,
+      "exercises": [
+        {
+          "name": "Trap Bar Deadlift",
+          "sets": 3,
+          "reps": "5",
+          "cue": "Push floor away"
+        },
+        {
+          "name": "Half-Kneeling Landmine Press",
+          "sets": 3,
+          "reps": "8 each",
+          "cue": "Press at 45\u00b0 angle"
+        },
+        {
+          "name": "Cable Pull-Through",
+          "sets": 3,
+          "reps": "12",
+          "cue": "Hips back, squeeze glutes"
+        },
+        {
+          "name": "Pallof Press",
+          "sets": 3,
+          "reps": "10 each side",
+          "cue": "Resist rotation"
+        },
+        {
+          "name": "Turkish Get-Up (Light)",
+          "sets": 2,
+          "reps": "3 each side",
+          "cue": "Slow and deliberate"
+        }
+      ]
+    },
+    "day3": {
+      "name": "VO2 Max Intervals",
+      "duration_min": 30,
+      "exercises": [
+        {
+          "name": "Warm-Up",
+          "sets": 1,
+          "reps": "5 min easy",
+          "cue": "Gradually increase pace"
+        },
+        {
+          "name": "Interval Sprints",
+          "sets": 6,
+          "reps": "1 min hard / 2 min easy",
+          "cue": "All out effort"
+        },
+        {
+          "name": "Cool Down",
+          "sets": 1,
+          "reps": "5 min walk",
+          "cue": "Bring heart rate down"
+        },
+        {
+          "name": "Couch Stretch",
+          "sets": 2,
+          "reps": "90 sec each",
+          "cue": "Squeeze glute, push hips forward"
+        }
+      ]
+    }
+  }
+}
