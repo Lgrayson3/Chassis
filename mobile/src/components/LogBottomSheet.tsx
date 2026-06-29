@@ -170,6 +170,32 @@ export default function LogBottomSheet({ visible, onDismiss, onLogged, defaultTa
         meal_id: mealId ? String(mealId) : null
       });
 
+      // Mark the latest pending nudge as resolved!
+      const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00Z';
+      try {
+        const { data: latestNudge } = await supabase
+          .from('nudge_events')
+          .select('id')
+          .eq('user_id', user.id)
+          .gte('sent_at', todayStart)
+          .eq('action_taken', 'no_action')
+          .order('sent_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestNudge) {
+          await supabase
+            .from('nudge_events')
+            .update({
+              action_taken: 'logged',
+              action_at: new Date().toISOString()
+            })
+            .eq('id', latestNudge.id);
+        }
+      } catch (err) {
+        console.warn('Failed to update nudge on log:', err);
+      }
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       
       // Update checkmark state if it was a selection meal

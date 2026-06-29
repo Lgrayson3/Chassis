@@ -128,10 +128,54 @@ export default function TodayScreen() {
         return;
       }
 
+      // Mark the latest pending nudge as resolved!
+      const todayStart = new Date().toISOString().split('T')[0] + 'T00:00:00Z';
+      const { data: latestNudge } = await supabase
+        .from('nudge_events')
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('sent_at', todayStart)
+        .eq('action_taken', 'no_action')
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestNudge) {
+        await supabase
+          .from('nudge_events')
+          .update({
+            action_taken: 'logged',
+            action_at: new Date().toISOString()
+          })
+          .eq('id', latestNudge.id);
+      }
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await loadData();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not log meal.');
+    }
+  };
+
+  const handleDismissNudge = async (nudgeId: string) => {
+    try {
+      const { error } = await supabase
+        .from('nudge_events')
+        .update({
+          action_taken: 'dismissed',
+          action_at: new Date().toISOString()
+        })
+        .eq('id', nudgeId);
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await loadData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not dismiss nudge.');
     }
   };
 
@@ -228,11 +272,17 @@ export default function TodayScreen() {
             {nudges.map((n, i) => (  
               <View key={i} style={styles.nudgeRow}>  
                 <Text style={styles.nudgeText}>  
-                  {n.nudge_type === 'meal_reminder' ? 'Meal reminder' : n.nudge_type === 'protein_deficit' ? 'Protein reminder' : n.nudge_type} sent {new Date(n.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  
+                  {n.nudge_type === 'meal_reminder' ? 'Meal reminder' : n.nudge_type === 'protein_deficit' ? 'Protein reminder' : n.nudge_type === 'catabolic_warning' ? 'Catabolic State Warning ⚠️' : n.nudge_type} sent {new Date(n.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}  
                 </Text>  
-                <Text style={styles.nudgeStatus}>  
-                  {n.action_taken === 'logged' ? '✓ logged' : n.action_taken === 'dismissed' ? 'dismissed' : 'no response'}  
-                </Text>  
+                {n.action_taken === 'no_action' || !n.action_taken ? (
+                  <TouchableOpacity onPress={() => handleDismissNudge(n.id)} style={styles.dismissBtn}>
+                    <Text style={styles.dismissBtnText}>Dismiss</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.nudgeStatus}>  
+                    {n.action_taken === 'logged' || n.action_taken === 'logged_protein' ? '✓ logged' : n.action_taken === 'opened' ? 'opened' : 'dismissed'}  
+                  </Text>  
+                )}
               </View>  
             ))}  
           </View>  
@@ -281,10 +331,12 @@ const styles = StyleSheet.create({
   smallButtonText: { color: '#f8fafc', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
   smallButtonOutline: { borderWidth: 1, borderColor: '#0ea5e9', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1 },  
   smallButtonOutlineText: { color: '#0ea5e9', fontSize: 14, fontWeight: '600', textAlign: 'center' },  
-  nudgeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' },  
+  nudgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#334155' },  
   nudgeText: { fontSize: 13, color: '#cbd5e1', flex: 1 },  
   nudgeStatus: { fontSize: 13, color: '#94a3b8' },  
   statusText: { fontSize: 14, fontWeight: '500' },  
   fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#0ea5e9', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },  
   fabText: { color: '#f8fafc', fontSize: 28, fontWeight: '300' },  
+  dismissBtn: { backgroundColor: '#334155', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  dismissBtnText: { color: '#ef4444', fontSize: 12, fontWeight: '600' },
 });  
