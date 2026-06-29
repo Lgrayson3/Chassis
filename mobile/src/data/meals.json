@@ -11,6 +11,26 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 28,
+    "fat_g": 6,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Greek yogurt (2% fat)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Mixed berries",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Granola",
+        "quantity": 0.25,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -25,6 +45,31 @@
     "meal_types": [
       "breakfast",
       "snack"
+    ],
+    "carbs_g": 12,
+    "fat_g": 4,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Whey protein powder",
+        "quantity": 1,
+        "unit": "scoop"
+      },
+      {
+        "name": "Almond milk",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Spinach",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Chia seeds",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -39,6 +84,31 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 10,
+    "fat_g": 18,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Chicken breast",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Romaine lettuce",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Olive oil dressing",
+        "quantity": 2,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Cherry tomatoes",
+        "quantity": 0.5,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -52,6 +122,26 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 4,
+    "fat_g": 2,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Egg whites",
+        "quantity": 6,
+        "unit": "large"
+      },
+      {
+        "name": "Spinach",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Feta cheese",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -65,6 +155,31 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 8,
+    "fat_g": 22,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Salmon fillet",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Asparagus spears",
+        "quantity": 8,
+        "unit": "pieces"
+      },
+      {
+        "name": "Olive oil",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 0.5,
+        "unit": "piece"
+      }
     ]
   },
   {
@@ -79,6 +194,26 @@
     "meal_types": [
       "snack",
       "breakfast"
+    ],
+    "carbs_g": 14,
+    "fat_g": 5,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Cottage cheese (low fat)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Pineapple chunks",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Walnuts",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -92,6 +227,31 @@
     ],
     "meal_types": [
       "lunch"
+    ],
+    "carbs_g": 8,
+    "fat_g": 10,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Ground turkey",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Butterhead lettuce",
+        "quantity": 4,
+        "unit": "leaves"
+      },
+      {
+        "name": "Salsa",
+        "quantity": 2,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Avocado",
+        "quantity": 0.25,
+        "unit": "whole"
+      }
     ]
   },
   {
@@ -106,6 +266,21 @@
     "meal_types": [
       "snack",
       "dinner"
+    ],
+    "carbs_g": 2,
+    "fat_g": 1,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Beef bone broth",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Green onions",
+        "quantity": 2,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -119,6 +294,36 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 16,
+    "fat_g": 12,
+    "grocery_category": "Produce",
+    "ingredients": [
+      {
+        "name": "Firm tofu",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Broccoli florets",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Bell peppers",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Soy sauce (low sodium)",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Sesame oil",
+        "quantity": 1,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -132,6 +337,31 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 32,
+    "fat_g": 7,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Rolled oats",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Protein powder",
+        "quantity": 0.75,
+        "unit": "scoop"
+      },
+      {
+        "name": "Flaxseeds",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Water / Almond milk",
+        "quantity": 1,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -146,6 +376,36 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 24,
+    "fat_g": 12,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Ahi tuna (sushi grade)",
+        "quantity": 5,
+        "unit": "oz"
+      },
+      {
+        "name": "Brown rice",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Cucumber slices",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Edamame (shelled)",
+        "quantity": 0.25,
+        "unit": "cup"
+      },
+      {
+        "name": "Soy-ginger dressing",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -159,6 +419,21 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 6,
+    "fat_g": 3,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Whey isolate powder",
+        "quantity": 1,
+        "unit": "scoop"
+      },
+      {
+        "name": "Water",
+        "quantity": 1.5,
+        "unit": "cups"
+      }
     ]
   },
   {
@@ -173,6 +448,26 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 40,
+    "fat_g": 8,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Chicken breast",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "White jasmine rice",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Steamed green beans",
+        "quantity": 0.5,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -188,6 +483,31 @@
     "meal_types": [
       "breakfast",
       "snack"
+    ],
+    "carbs_g": 6,
+    "fat_g": 12,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Whole eggs",
+        "quantity": 2,
+        "unit": "large"
+      },
+      {
+        "name": "Cottage cheese",
+        "quantity": 0.25,
+        "unit": "cup"
+      },
+      {
+        "name": "Bacon bits",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Gruyere cheese",
+        "quantity": 2,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -201,6 +521,31 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 14,
+    "fat_g": 10,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Shrimp (peeled & deveined)",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Zucchini noodles (zoodles)",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Garlic cloves",
+        "quantity": 2,
+        "unit": "pieces"
+      },
+      {
+        "name": "Butter",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -214,6 +559,36 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 35,
+    "fat_g": 8,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Rolled oats",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Greek yogurt",
+        "quantity": 0.25,
+        "unit": "cup"
+      },
+      {
+        "name": "Chia seeds",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Almond milk",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Honey",
+        "quantity": 1,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -227,6 +602,31 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 18,
+    "fat_g": 14,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Flank steak",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Broccoli florets",
+        "quantity": 1.5,
+        "unit": "cups"
+      },
+      {
+        "name": "Sesame oil",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Soy sauce",
+        "quantity": 2,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -241,6 +641,31 @@
     "meal_types": [
       "snack",
       "breakfast"
+    ],
+    "carbs_g": 18,
+    "fat_g": 9,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Chia seeds",
+        "quantity": 3,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Coconut milk (carton)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Vanilla extract",
+        "quantity": 0.5,
+        "unit": "tsp"
+      },
+      {
+        "name": "Maple syrup",
+        "quantity": 1,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -256,6 +681,36 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 28,
+    "fat_g": 3,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Brown lentils",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Vegetable broth",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 1,
+        "unit": "medium"
+      },
+      {
+        "name": "Celery stalk",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 0.5,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -270,6 +725,31 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 30,
+    "fat_g": 6,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Banana",
+        "quantity": 0.5,
+        "unit": "medium"
+      },
+      {
+        "name": "Egg",
+        "quantity": 1,
+        "unit": "large"
+      },
+      {
+        "name": "Protein powder",
+        "quantity": 1,
+        "unit": "scoop"
+      },
+      {
+        "name": "Oat flour",
+        "quantity": 2,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -284,6 +764,31 @@
     "meal_types": [
       "snack",
       "dinner"
+    ],
+    "carbs_g": 8,
+    "fat_g": 4,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Miso paste",
+        "quantity": 1.5,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Dashi broth",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Soft tofu",
+        "quantity": 4,
+        "unit": "oz"
+      },
+      {
+        "name": "Wakame seaweed",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -297,6 +802,26 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 38,
+    "fat_g": 18,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Sirloin steak",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Sweet potato",
+        "quantity": 1,
+        "unit": "medium"
+      },
+      {
+        "name": "Butter",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -311,6 +836,31 @@
     "meal_types": [
       "breakfast",
       "snack"
+    ],
+    "carbs_g": 20,
+    "fat_g": 4,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Greek yogurt (non-fat)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Frozen strawberries",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Almond milk",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Honey",
+        "quantity": 1,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -326,6 +876,31 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 12,
+    "fat_g": 6,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Shredded chicken breast",
+        "quantity": 4,
+        "unit": "oz"
+      },
+      {
+        "name": "Chicken broth",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Carrot slices",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Celery slices",
+        "quantity": 0.5,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -339,6 +914,31 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 22,
+    "fat_g": 10,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Hummus",
+        "quantity": 0.25,
+        "unit": "cup"
+      },
+      {
+        "name": "Edamame (shelled, steamed)",
+        "quantity": 0.75,
+        "unit": "cup"
+      },
+      {
+        "name": "Cucumber slices",
+        "quantity": 10,
+        "unit": "pieces"
+      },
+      {
+        "name": "Pita chips",
+        "quantity": 10,
+        "unit": "pieces"
+      }
     ]
   },
   {
@@ -352,6 +952,26 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 2,
+    "fat_g": 14,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Pork tenderloin",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Dijon mustard",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Olive oil",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -365,6 +985,26 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 14,
+    "fat_g": 3,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Chocolate protein powder",
+        "quantity": 1,
+        "unit": "scoop"
+      },
+      {
+        "name": "Unsweetened cocoa powder",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Skim milk",
+        "quantity": 1,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -378,6 +1018,31 @@
     ],
     "meal_types": [
       "lunch"
+    ],
+    "carbs_g": 42,
+    "fat_g": 12,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Quinoa (cooked)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Chickpeas",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Tahini dressing",
+        "quantity": 1.5,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Kale leaves",
+        "quantity": 1,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -391,6 +1056,26 @@
     ],
     "meal_types": [
       "breakfast"
+    ],
+    "carbs_g": 6,
+    "fat_g": 22,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Whole eggs",
+        "quantity": 2,
+        "unit": "large"
+      },
+      {
+        "name": "Avocado",
+        "quantity": 0.5,
+        "unit": "whole"
+      },
+      {
+        "name": "Butter",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -405,6 +1090,26 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 6,
+    "fat_g": 8,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Cod fillet",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Spinach (sauteed)",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Olive oil",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -418,6 +1123,26 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 16,
+    "fat_g": 2,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Greek yogurt",
+        "quantity": 0.75,
+        "unit": "cup"
+      },
+      {
+        "name": "Sugar-free chocolate pudding mix",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Raspberries",
+        "quantity": 0.25,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -432,6 +1157,31 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 24,
+    "fat_g": 10,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Ground turkey (lean)",
+        "quantity": 5,
+        "unit": "oz"
+      },
+      {
+        "name": "Canned kidney beans",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Canned crushed tomatoes",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Chili powder",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -446,6 +1196,21 @@
     "meal_types": [
       "breakfast",
       "snack"
+    ],
+    "carbs_g": 1,
+    "fat_g": 0,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Brewed coffee",
+        "quantity": 1,
+        "unit": "cup"
+      },
+      {
+        "name": "Collagen peptides",
+        "quantity": 1,
+        "unit": "scoop"
+      }
     ]
   },
   {
@@ -459,6 +1224,31 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 10,
+    "fat_g": 8,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Baked cod fillet",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "Zucchini slices",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Yellow squash slices",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Olive oil",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -473,6 +1263,26 @@
     "meal_types": [
       "breakfast",
       "snack"
+    ],
+    "carbs_g": 15,
+    "fat_g": 8,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Ricotta cheese (part-skim)",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Blueberries",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Lemon zest",
+        "quantity": 0.25,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -486,6 +1296,31 @@
     ],
     "meal_types": [
       "lunch"
+    ],
+    "carbs_g": 8,
+    "fat_g": 9,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Ground chicken breast",
+        "quantity": 5,
+        "unit": "oz"
+      },
+      {
+        "name": "Water chestnuts",
+        "quantity": 2,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Hoisin sauce",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Lettuce leaves",
+        "quantity": 4,
+        "unit": "leaves"
+      }
     ]
   },
   {
@@ -499,6 +1334,16 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 4,
+    "fat_g": 0,
+    "grocery_category": "Pantry",
+    "ingredients": [
+      {
+        "name": "Vegetable broth",
+        "quantity": 2,
+        "unit": "cups"
+      }
     ]
   },
   {
@@ -512,6 +1357,31 @@
     ],
     "meal_types": [
       "dinner"
+    ],
+    "carbs_g": 20,
+    "fat_g": 12,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Beef chuck cubes",
+        "quantity": 5,
+        "unit": "oz"
+      },
+      {
+        "name": "Beef broth",
+        "quantity": 1.5,
+        "unit": "cups"
+      },
+      {
+        "name": "Carrot chunks",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Potato chunks",
+        "quantity": 0.5,
+        "unit": "cup"
+      }
     ]
   },
   {
@@ -525,6 +1395,26 @@
     ],
     "meal_types": [
       "snack"
+    ],
+    "carbs_g": 12,
+    "fat_g": 6,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Silken tofu",
+        "quantity": 0.5,
+        "unit": "block"
+      },
+      {
+        "name": "Cocoa powder",
+        "quantity": 1,
+        "unit": "tbsp"
+      },
+      {
+        "name": "Honey",
+        "quantity": 1,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -539,6 +1429,26 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 4,
+    "fat_g": 6,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Jumbo shrimp",
+        "quantity": 6,
+        "unit": "pieces"
+      },
+      {
+        "name": "Cherry tomatoes",
+        "quantity": 4,
+        "unit": "pieces"
+      },
+      {
+        "name": "Olive oil",
+        "quantity": 0.5,
+        "unit": "tbsp"
+      }
     ]
   },
   {
@@ -553,6 +1463,26 @@
     "meal_types": [
       "snack",
       "dinner"
+    ],
+    "carbs_g": 4,
+    "fat_g": 5,
+    "grocery_category": "Dairy & Eggs",
+    "ingredients": [
+      {
+        "name": "Chicken broth",
+        "quantity": 2,
+        "unit": "cups"
+      },
+      {
+        "name": "Whole eggs (beaten)",
+        "quantity": 1,
+        "unit": "large"
+      },
+      {
+        "name": "Sesame oil",
+        "quantity": 0.25,
+        "unit": "tsp"
+      }
     ]
   },
   {
@@ -567,6 +1497,26 @@
     "meal_types": [
       "lunch",
       "dinner"
+    ],
+    "carbs_g": 16,
+    "fat_g": 15,
+    "grocery_category": "Proteins",
+    "ingredients": [
+      {
+        "name": "Ground bison",
+        "quantity": 6,
+        "unit": "oz"
+      },
+      {
+        "name": "White rice",
+        "quantity": 0.5,
+        "unit": "cup"
+      },
+      {
+        "name": "Avocado slices",
+        "quantity": 0.25,
+        "unit": "whole"
+      }
     ]
   }
 ]
