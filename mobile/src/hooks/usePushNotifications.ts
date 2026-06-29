@@ -38,7 +38,9 @@ async function registerPushToken(userId: string) {
   const tokenData = await Notifications.getExpoPushTokenAsync();  
   const token = tokenData.data;
 
-  await supabase.from('profiles').update({  
-    push_token: token,  
-  }).eq('id', userId);  
+  await supabase.from('push_tokens').upsert({  
+    user_id: userId,  
+    token,  
+    platform: Platform.OS,  
+  }, { onConflict: 'user_id' });  
 }  
