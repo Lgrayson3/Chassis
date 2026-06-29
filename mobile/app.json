@@ -4,6 +4,9 @@
     "slug": "chassis-mobile",
     "version": "1.0.0",
     "scheme": "chassis",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
     "android": {
       "package": "health.chassis.app"
     },
