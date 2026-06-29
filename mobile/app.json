@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Chassis",
+    "slug": "chassis-mobile",
+    "version": "1.0.0",
+    "scheme": "chassis",
+    "android": {
+      "package": "health.chassis.app"
+    },
+    "ios": {
+      "bundleIdentifier": "health.chassis.app"
+    }
+  }
+}
