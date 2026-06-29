@@ -1,0 +1,572 @@
+[
+  {
+    "id": 1,
+    "name": "Greek Yogurt Parfait",
+    "protein_g": 23,
+    "calories": 320,
+    "prep_time_min": 5,
+    "texture": [
+      "soft",
+      "standard"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Protein Smoothie",
+    "protein_g": 30,
+    "calories": 280,
+    "prep_time_min": 3,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Grilled Chicken Salad",
+    "protein_g": 42,
+    "calories": 450,
+    "prep_time_min": 15,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Egg White Scramble",
+    "protein_g": 20,
+    "calories": 220,
+    "prep_time_min": 10,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Salmon & Asparagus",
+    "protein_g": 38,
+    "calories": 420,
+    "prep_time_min": 20,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Cottage Cheese Bowl",
+    "protein_g": 25,
+    "calories": 240,
+    "prep_time_min": 3,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "snack",
+      "breakfast"
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Turkey Lettuce Wraps",
+    "protein_g": 28,
+    "calories": 310,
+    "prep_time_min": 12,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch"
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Bone Broth Soup",
+    "protein_g": 15,
+    "calories": 120,
+    "prep_time_min": 5,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack",
+      "dinner"
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Tofu Stir-Fry",
+    "protein_g": 22,
+    "calories": 350,
+    "prep_time_min": 18,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Protein Oatmeal",
+    "protein_g": 18,
+    "calories": 290,
+    "prep_time_min": 8,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 11,
+    "name": "Tuna Poke Bowl",
+    "protein_g": 35,
+    "calories": 480,
+    "prep_time_min": 15,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Protein Shake",
+    "protein_g": 27,
+    "calories": 180,
+    "prep_time_min": 2,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Chicken & Rice",
+    "protein_g": 40,
+    "calories": 520,
+    "prep_time_min": 25,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 14,
+    "name": "Egg Bites",
+    "protein_g": 16,
+    "calories": 200,
+    "prep_time_min": 20,
+    "texture": [
+      "soft",
+      "standard"
+    ],
+    "meal_types": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "id": 15,
+    "name": "Shrimp Zoodles",
+    "protein_g": 30,
+    "calories": 280,
+    "prep_time_min": 15,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 16,
+    "name": "Overnight Oats",
+    "protein_g": 19,
+    "calories": 310,
+    "prep_time_min": 5,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 17,
+    "name": "Beef & Broccoli",
+    "protein_g": 36,
+    "calories": 440,
+    "prep_time_min": 22,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 18,
+    "name": "Chia Pudding",
+    "protein_g": 12,
+    "calories": 210,
+    "prep_time_min": 5,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "snack",
+      "breakfast"
+    ]
+  },
+  {
+    "id": 19,
+    "name": "Lentil Soup",
+    "protein_g": 18,
+    "calories": 260,
+    "prep_time_min": 30,
+    "texture": [
+      "liquid",
+      "soft"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 20,
+    "name": "Protein Pancakes",
+    "protein_g": 24,
+    "calories": 340,
+    "prep_time_min": 15,
+    "texture": [
+      "soft",
+      "standard"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 21,
+    "name": "Miso Soup with Tofu",
+    "protein_g": 14,
+    "calories": 140,
+    "prep_time_min": 10,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack",
+      "dinner"
+    ]
+  },
+  {
+    "id": 22,
+    "name": "Steak & Sweet Potato",
+    "protein_g": 45,
+    "calories": 560,
+    "prep_time_min": 25,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 23,
+    "name": "Greek Yogurt Smoothie",
+    "protein_g": 22,
+    "calories": 250,
+    "prep_time_min": 3,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "id": 24,
+    "name": "Chicken Soup",
+    "protein_g": 28,
+    "calories": 310,
+    "prep_time_min": 35,
+    "texture": [
+      "liquid",
+      "soft"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 25,
+    "name": "Edamame Hummus Plate",
+    "protein_g": 16,
+    "calories": 240,
+    "prep_time_min": 8,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 26,
+    "name": "Pork Tenderloin",
+    "protein_g": 38,
+    "calories": 420,
+    "prep_time_min": 25,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 27,
+    "name": "Protein Hot Chocolate",
+    "protein_g": 15,
+    "calories": 160,
+    "prep_time_min": 5,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 28,
+    "name": "Quinoa Buddha Bowl",
+    "protein_g": 20,
+    "calories": 380,
+    "prep_time_min": 18,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch"
+    ]
+  },
+  {
+    "id": 29,
+    "name": "Scrambled Eggs & Avocado",
+    "protein_g": 18,
+    "calories": 290,
+    "prep_time_min": 8,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "breakfast"
+    ]
+  },
+  {
+    "id": 30,
+    "name": "White Fish & Greens",
+    "protein_g": 32,
+    "calories": 310,
+    "prep_time_min": 20,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 31,
+    "name": "Protein Mousse",
+    "protein_g": 20,
+    "calories": 180,
+    "prep_time_min": 5,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 32,
+    "name": "Turkey Chili",
+    "protein_g": 30,
+    "calories": 380,
+    "prep_time_min": 35,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 33,
+    "name": "Collagen Coffee",
+    "protein_g": 10,
+    "calories": 80,
+    "prep_time_min": 2,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "id": 34,
+    "name": "Baked Cod & Vegetables",
+    "protein_g": 34,
+    "calories": 340,
+    "prep_time_min": 22,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 35,
+    "name": "Ricotta & Berries",
+    "protein_g": 14,
+    "calories": 200,
+    "prep_time_min": 3,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "breakfast",
+      "snack"
+    ]
+  },
+  {
+    "id": 36,
+    "name": "Chicken Lettuce Cups",
+    "protein_g": 26,
+    "calories": 280,
+    "prep_time_min": 15,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch"
+    ]
+  },
+  {
+    "id": 37,
+    "name": "Vegetable Broth",
+    "protein_g": 5,
+    "calories": 60,
+    "prep_time_min": 5,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 38,
+    "name": "Beef Stew",
+    "protein_g": 35,
+    "calories": 420,
+    "prep_time_min": 45,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "dinner"
+    ]
+  },
+  {
+    "id": 39,
+    "name": "Silken Tofu Pudding",
+    "protein_g": 12,
+    "calories": 150,
+    "prep_time_min": 5,
+    "texture": [
+      "soft"
+    ],
+    "meal_types": [
+      "snack"
+    ]
+  },
+  {
+    "id": 40,
+    "name": "Grilled Shrimp Skewers",
+    "protein_g": 28,
+    "calories": 260,
+    "prep_time_min": 18,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  },
+  {
+    "id": 41,
+    "name": "Egg Drop Soup",
+    "protein_g": 12,
+    "calories": 130,
+    "prep_time_min": 10,
+    "texture": [
+      "liquid"
+    ],
+    "meal_types": [
+      "snack",
+      "dinner"
+    ]
+  },
+  {
+    "id": 42,
+    "name": "Bison Burger Bowl",
+    "protein_g": 40,
+    "calories": 480,
+    "prep_time_min": 20,
+    "texture": [
+      "standard"
+    ],
+    "meal_types": [
+      "lunch",
+      "dinner"
+    ]
+  }
+]
