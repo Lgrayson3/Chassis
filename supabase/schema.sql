@@ -65,6 +65,17 @@ CREATE TABLE public.meal_blueprints (
 );
 
 -- ============================================
+-- MEAL_SELECTIONS (user's chosen meals for the week)
+-- ============================================
+CREATE TABLE public.meal_selections (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             uuid NOT NULL REFERENCES auth.users ON DELETE CASCADE,
+  week_start          date NOT NULL,
+  selections          jsonb NOT NULL DEFAULT '[]',
+  created_at          timestamptz DEFAULT now()
+);
+
+-- ============================================
 -- PROTEIN_LOGS (every eating event)
 -- ============================================
 CREATE TABLE public.protein_logs (
@@ -163,6 +174,7 @@ ALTER TABLE public.clinics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clinic_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meal_blueprints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meal_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.protein_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nudge_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workout_logs ENABLE ROW LEVEL SECURITY;
@@ -187,6 +199,9 @@ CREATE POLICY "Clinicians can view patient profiles in their clinic" ON public.p
 
 -- Policies for user-specific tables
 CREATE POLICY "Users can manage their own meal_blueprints" ON public.meal_blueprints
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can manage their own meal_selections" ON public.meal_selections
   FOR ALL USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can manage their own protein_logs" ON public.protein_logs
