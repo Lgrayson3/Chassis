@@ -83,6 +83,7 @@ CREATE TABLE public.protein_logs (
   user_id             uuid NOT NULL REFERENCES auth.users ON DELETE CASCADE,
   amount_g            numeric(5,1) NOT NULL,
   source              text,
+  meal_id             text,
   meal_type           text CHECK (meal_type IN ('breakfast', 'snack1', 'lunch', 
                         'snack2', 'dinner', 'emergency')),
   logged_at           timestamptz DEFAULT now(),
