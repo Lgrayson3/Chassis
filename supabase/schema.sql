@@ -26,7 +26,7 @@ CREATE TABLE public.profiles (
   first_name            text,
   tier                  text NOT NULL DEFAULT 'glucose' CHECK (tier IN ('glucose', 'longevity', 'glp1')),
   body_weight_kg        numeric(5,2),
-  protein_target_g      numeric(5,1) GENERATED ALWAYS AS (body_weight_kg * 1.4) STORED,
+  protein_target_g      numeric(5,1),
   texture_preference    text DEFAULT 'standard' CHECK (texture_preference IN 
                         ('liquid', 'soft', 'standard', 'emergency')),
   meal_schedule         jsonb DEFAULT '{"breakfast": "07:00", "snack1": "10:30", 
