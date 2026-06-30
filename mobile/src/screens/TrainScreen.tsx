@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';  
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert, ActivityIndicator } from 'react-native';  
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert, ActivityIndicator, Animated } from 'react-native';  
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';  
 import { useAuth } from '../hooks/useAuth';  
@@ -17,6 +17,24 @@ function calcFuelStatus(proteinConsumedG: number, proteinTargetG: number, lastLo
   return 'red';  
 }
 
+const bodyweightAlternatives: Record<string, string> = {
+  "Goblet Squats": "Bodyweight squats",
+  "Push-Ups (Incline)": "Knee push-ups / Wall push-ups",
+  "Single-Leg RDL": "Bodyweight single-leg RDL",
+  "Bent Over Row": "Doorframe row / Bodyweight Y-raises",
+  "Plank": "Knee plank",
+  "Brisk Walk / Incline Treadmill": "High knees in place",
+  "Dead Bug": "Banded dead bug alternative",
+  "Bird Dog": "Kneeling bird dog",
+  "Glute Bridge": "Single-leg glute bridge",
+  "Side Plank": "Knee side plank",
+  "Romanian Deadlift": "Good mornings (bodyweight)",
+  "Overhead Press": "Pike push-ups (bodyweight)",
+  "Split Squat": "Bodyweight split squats",
+  "Lat Pulldown": "Bodyweight doorframe pull / Y-raises",
+  "Farmer Carry": "Static march in place",
+};
+
 export default function TrainScreen() {  
   const { user } = useAuth();  
   const navigation = useNavigation<any>();
@@ -24,11 +42,17 @@ export default function TrainScreen() {
   const [profile, setProfile] = useState<any>(null);  
   const [proteinToday, setProteinToday] = useState(0);  
   const [fuelStatus, setFuelStatus] = useState<'green' | 'yellow' | 'orange' | 'red'>('red');  
-  const [todayWorkout, setTodayWorkout] = useState<any>(null);  
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Phase 4 states
+  // Selector and customization states
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [bypassed, setBypassed] = useState(false);
+  const [completedExercises, setCompletedExercises] = useState<Record<number, boolean>>({});
+  const [swappedExercises, setSwappedExercises] = useState<Record<number, boolean>>({});
+  const [setsAdjustments, setSetsAdjustments] = useState<Record<number, number>>({});
+  const [completedDaysMap, setCompletedDaysMap] = useState<Record<number, boolean>>({});
+
   const [logSheetVisible, setLogSheetVisible] = useState(false);
   const [workoutComplete, setWorkoutComplete] = useState(false);
 
@@ -37,15 +61,22 @@ export default function TrainScreen() {
       loadData();  
       
       return () => {
-        if (fuelStatus === 'red') {
+        if (fuelStatus === 'red' && selectedDay && !bypassed) {
           trackEvent('workout_skipped', {
             fuel_status: 'red',
             protein_at_time: proteinToday
           });
         }
       };
-    }, [fuelStatus, proteinToday])  
+    }, [fuelStatus, proteinToday, selectedDay, bypassed])  
   );
+
+  // Reset selected state when day changes
+  useEffect(() => {
+    setCompletedExercises({});
+    setSwappedExercises({});
+    setSetsAdjustments({});
+  }, [selectedDay]);
 
   async function loadData() {  
     if (!user) return;
@@ -63,37 +94,39 @@ export default function TrainScreen() {
       const status = calcFuelStatus(proteinSum, profileData?.protein_target_g || 100, lastLog);  
       setFuelStatus(status);
 
-      const startDate = new Date(profileData?.created_at || new Date());  
-      const daysDiff = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));  
-      const dayNumber = (daysDiff % 3) + 1;  
-      const tier = profileData?.tier || 'glp1';  
-      setTodayWorkout((workoutData as any)[tier]?.[`day${dayNumber}`]);
+      // Fetch completed workouts in the last 7 days to show completion checks in the Hub
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
 
-      // Check current status of today's workout log
-      const { data: existing, error } = await supabase
+      const { data: pastLogs } = await supabase
+        .from('workout_logs')
+        .select('day_number, status')
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .gte('scheduled_for', sevenDaysAgoStr);
+
+      const completedDays: Record<number, boolean> = {};
+      if (pastLogs) {
+        pastLogs.forEach(log => {
+          if (log.day_number) completedDays[log.day_number] = true;
+        });
+      }
+      setCompletedDaysMap(completedDays);
+
+      // Check if user completed a workout today
+      const { data: existing } = await supabase
         .from('workout_logs')
         .select('*')
         .eq('user_id', user.id)
         .eq('scheduled_for', today)
+        .eq('status', 'completed')
         .maybeSingle();
 
       if (existing) {
-        if (existing.status === 'completed') {
-          setWorkoutComplete(true);
-        } else {
-          setWorkoutComplete(false);
-        }
+        setWorkoutComplete(true);
       } else {
-        // Log the workout as scheduled ONCE, not on every screen visit
         setWorkoutComplete(false);
-        await supabase.from('workout_logs').insert({  
-          user_id: user.id,  
-          scheduled_for: today,  
-          day_number: dayNumber,  
-          fuel_status: status,  
-          protein_at_start_g: proteinSum,  
-          status: status === 'red' ? 'skipped_underfueled' : 'scheduled',  
-        });
       }
     } catch (err) {
       console.error(err);
@@ -103,32 +136,34 @@ export default function TrainScreen() {
   }
 
   const handleCompleteWorkout = async () => {
-    if (!user) return;
+    if (!user || !selectedDay) return;
     const today = new Date().toISOString().split('T')[0];
-    
+    const dayNum = parseInt(selectedDay.replace('day', '')) || 1;
+    const tier = profile?.tier === 'longevity' ? 'longevity' : 'glp1';
+    const selectedWorkout = (workoutData as any)[tier]?.[selectedDay];
+
     try {
       const { error } = await supabase
         .from('workout_logs')
-        .update({
+        .insert({  
+          user_id: user.id,  
+          scheduled_for: today,  
+          day_number: dayNum,  
+          fuel_status: fuelStatus,  
+          protein_at_start_g: proteinToday,  
           status: 'completed',
           completed_at: new Date().toISOString(),
-        })
-        .eq('user_id', user.id)
-        .eq('scheduled_for', today);
+        });
 
       if (error) {
         Alert.alert('Error completing workout', error.message);
         return;
       }
 
-      // Track analytics event
-      const startDate = new Date(profile?.created_at || new Date());  
-      const daysDiff = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));  
-      const dayNumber = (daysDiff % 3) + 1;
       await trackEvent('workout_completed', {
-        day_number: dayNumber,
+        day_number: dayNum,
         fuel_status: fuelStatus,
-        duration_min: todayWorkout?.duration_min || 25
+        duration_min: selectedWorkout?.duration_min || 25
       });
 
       setWorkoutComplete(true);
@@ -143,57 +178,38 @@ export default function TrainScreen() {
     }
   };
 
-  const rescheduleWorkout = async (daysAhead: number) => {
-    if (!user) return;
-    try {
-      const today = new Date();
-      const newDate = new Date(today.getTime() + daysAhead * 24 * 60 * 60 * 1000);
-      const newDateStr = newDate.toISOString().split('T')[0];
-      const todayStr = today.toISOString().split('T')[0];
-
-      const { error } = await supabase
-        .from('workout_logs')
-        .update({ scheduled_for: newDateStr })
-        .eq('user_id', user.id)
-        .eq('scheduled_for', todayStr);
-
-      if (error) {
-        Alert.alert('Error rescheduling session', error.message);
-        return;
-      }
-
-      Alert.alert('Rescheduled', `Workout moved to ${newDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
-      await loadData();
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const handleRescheduleAlert = () => {
-    Alert.alert(
-      'Reschedule Workout',
-      'When would you like to move this session to?',
-      [
-        { text: 'Tomorrow', onPress: () => rescheduleWorkout(1) },
-        { text: 'Day after tomorrow', onPress: () => rescheduleWorkout(2) },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
   const onRefresh = async () => {  
     setRefreshing(true);  
     await loadData();  
     setRefreshing(false);  
   };  
 
-  const mobilityExercises = [  
-    { name: 'Cat-Cow', reps: '10 breaths', cue: 'Move slowly with your breath' },  
-    { name: 'Hip Circles', reps: '10 each direction', cue: 'Wide stance, big circles' },  
-    { name: 'Thoracic Rotation', reps: '10 each side', cue: 'Open chest to ceiling' },  
-    { name: 'Deep Squat Hold', reps: '60 seconds', cue: 'Heels down, chest up' },  
-    { name: 'Couch Stretch', reps: '90 seconds each leg', cue: 'Squeeze glute, push hips forward' },  
-  ];
+  const getSetsCount = (ex: any, index: number) => {
+    if (setsAdjustments[index] !== undefined) {
+      return setsAdjustments[index];
+    }
+    // Scale sets based on fuel status
+    if (fuelStatus === 'orange') return 1;
+    if (fuelStatus === 'yellow') return 2;
+    return ex.sets;
+  };
+
+  const adjustSets = (index: number, change: number, defaultSets: number) => {
+    const current = getSetsCount(exercises[index], index);
+    const newVal = Math.max(1, current + change);
+    setSetsAdjustments(prev => ({
+      ...prev,
+      [index]: newVal
+    }));
+  };
+
+  const toggleSwap = (index: number) => {
+    setSwappedExercises(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   if (loading) {
     return (
@@ -215,27 +231,35 @@ export default function TrainScreen() {
     );
   }
 
-  if (fuelStatus === 'red') {  
-    return (  
-      <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
-        <ScrollView 
-          contentContainerStyle={{ padding: 24 }}
-          style={styles.container} 
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" />}
-        >  
-          <Text style={styles.header}>Rest Day Recommended</Text>  
-          <Text style={styles.body}>Your body needs fuel before it needs training. Eating today is the workout.</Text>  
-          <Text style={styles.proteinStatus}>You've logged {Math.round(proteinToday)}g of {Math.round(profile?.protein_target_g || 100)}g protein goal</Text>  
-          
-          <TouchableOpacity style={styles.button} onPress={() => setLogSheetVisible(true)}>  
-            <Text style={styles.buttonText}>Log Protein Now</Text>  
-          </TouchableOpacity>  
-          
-          <TouchableOpacity style={styles.buttonOutline} onPress={handleRescheduleAlert}>  
-            <Text style={styles.buttonOutlineText}>Reschedule Workout</Text>  
-          </TouchableOpacity>  
-        </ScrollView>
+  const tier = profile?.tier === 'longevity' ? 'longevity' : 'glp1';
 
+  // 1. Lockout Gate View if Red and not bypassed
+  if (selectedDay && fuelStatus === 'red' && !bypassed) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0f172a', padding: 24, justifyContent: 'center' }}>
+        <TouchableOpacity 
+          style={styles.backButtonHeader} 
+          onPress={() => setSelectedDay(null)}
+        >
+          <Text style={styles.backText}>← Back to Workout Hub</Text>
+        </TouchableOpacity>
+        
+        <View style={[styles.successCard, { borderColor: '#ef4444' }]}>
+          <Text style={[styles.successIcon, { color: '#ef4444' }]}>⚠</Text>
+          <Text style={styles.successTitle}>Rest Day Recommended</Text>
+          <Text style={[styles.successText, { marginBottom: 20 }]}>
+            Your amino-acid availability is low ({Math.round(proteinToday)}g logged today). GLP-1 training requires proper fuel to protect your muscles from lean tissue wasting.
+          </Text>
+          
+          <TouchableOpacity style={[styles.button, { width: '100%' }]} onPress={() => setLogSheetVisible(true)}>  
+            <Text style={styles.buttonText}>Log Protein to Unlock</Text>  
+          </TouchableOpacity>  
+          
+          <TouchableOpacity style={styles.bypassBtn} onPress={() => setBypassed(true)}>  
+            <Text style={styles.bypassBtnText}>Bypass Gate (I have eaten)</Text>  
+          </TouchableOpacity> 
+        </View>
+        
         <LogBottomSheet
           visible={logSheetVisible}
           onDismiss={() => setLogSheetVisible(false)}
@@ -243,67 +267,220 @@ export default function TrainScreen() {
           defaultTab="protein"
         />
       </View>
-    );  
+    );
   }
 
-  if (fuelStatus === 'orange') {  
-    return (  
-      <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" />}>  
-        <Text style={styles.header}>Mobility Session</Text>  
-        <Text style={styles.body}>15-minute mobility flow. No equipment needed.</Text>  
-        {mobilityExercises.map((ex, i) => (  
-          <View key={i} style={styles.exerciseCard}>  
-            <Text style={styles.exerciseName}>{ex.name}</Text>  
-            <Text style={styles.exerciseReps}>{ex.reps}</Text>  
-            <Text style={styles.exerciseCue}>{ex.cue}</Text>  
-          </View>  
-        ))}  
-      </ScrollView>  
-    );  
+  // 2. Hub Dashboard View
+  if (!selectedDay) {
+    const programName = tier === 'glp1' ? 'GLP-1 Strength & Tone' : 'Longevity Strength & Stability';
+    
+    const workoutsList = [
+      { key: 'day1', label: 'Day 1', data: (workoutData as any)[tier]?.day1 },
+      { key: 'day2', label: 'Day 2', data: (workoutData as any)[tier]?.day2 },
+      { key: 'day3', label: 'Day 3', data: (workoutData as any)[tier]?.day3 }
+    ];
+
+    const startDate = new Date(profile?.created_at || new Date());  
+    const daysDiff = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24));  
+    const recommendedDayNum = (daysDiff % 3) + 1; 
+    const recommendedDayKey = `day${recommendedDayNum}`;
+
+    const fuelConfig = {
+      green: { border: '#10b981', bg: '#10b98108', text: '#10b981', desc: 'Fully Fueled. Your amino-acid levels are optimal for strength training and muscle preservation.' },
+      yellow: { border: '#eab308', bg: '#eab30808', text: '#eab308', desc: 'Sufficiently Fueled. You can train today, but sets will be scaled down to 2 to protect lean tissue.' },
+      orange: { border: '#f97316', bg: '#f9731608', text: '#f97316', desc: 'Mild Deficit. Mobility session is recommended. If training, sets are limited to 1.' },
+      red: { border: '#ef4444', bg: '#ef444408', text: '#ef4444', desc: 'Critical Deficit. Heavy lifting is locked. Prioritize logging a high-protein meal or snack to unlock.' }
+    };
+    
+    const activeFuel = fuelConfig[fuelStatus];
+
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
+        <ScrollView 
+          contentContainerStyle={{ padding: 24 }}
+          style={styles.container}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" />}
+        >
+          <Text style={styles.header}>Training Hub</Text>
+          <Text style={styles.body}>{programName}</Text>
+
+          <View style={[styles.fuelCard, { borderColor: activeFuel.border, backgroundColor: activeFuel.bg }]}>
+            <Text style={[styles.fuelCardTitle, { color: activeFuel.text }]}>
+              Fuel Status: {fuelStatus.toUpperCase()}
+            </Text>
+            <Text style={styles.fuelCardDesc}>{activeFuel.desc}</Text>
+          </View>
+
+          <Text style={styles.sectionTitle}>Weekly Plan</Text>
+          
+          {workoutsList.map((dayItem) => {
+            const isCompleted = completedDaysMap[parseInt(dayItem.key.replace('day', ''))];
+            const isRecommended = dayItem.key === recommendedDayKey;
+            
+            let pillColor = '#334155';
+            let pillText = 'View Workout';
+            let pillTextColor = '#cbd5e1';
+            
+            if (isCompleted) {
+              pillColor = '#10b98120';
+              pillText = 'Completed';
+              pillTextColor = '#10b981';
+            } else if (isRecommended) {
+              pillColor = '#0ea5e920';
+              pillText = 'Recommended';
+              pillTextColor = '#0ea5e9';
+            }
+
+            return (
+              <TouchableOpacity 
+                key={dayItem.key} 
+                style={[styles.dayCard, isRecommended && styles.dayCardSelected]}
+                onPress={() => {
+                  setSelectedDay(dayItem.key);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }}
+              >
+                <View style={styles.dayLeft}>
+                  <Text style={styles.dayLabel}>{dayItem.label}</Text>
+                  <Text style={styles.dayTitle}>{dayItem.data?.name}</Text>
+                  <Text style={styles.dayMeta}>
+                    {dayItem.data?.duration_min} min • {dayItem.data?.exercises?.length} exercises
+                  </Text>
+                </View>
+                
+                <View style={[styles.statusPill, { backgroundColor: pillColor }]}>
+                  <Text style={[styles.statusTextPill, { color: pillTextColor }]}>
+                    {pillText}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
   }
 
-  const isYellow = fuelStatus === 'yellow';  
-  const exercises = todayWorkout?.exercises || [];
+  // 3. Active Workout View
+  const selectedWorkout = (workoutData as any)[tier]?.[selectedDay];
+  const exercises = selectedWorkout?.exercises || [];
+  const isYellow = fuelStatus === 'yellow';
+  const isOrange = fuelStatus === 'orange';
+  
+  const exercisesCount = exercises.length;
+  const completedCount = Object.values(completedExercises).filter(Boolean).length;
 
-  return (  
+  return (
     <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
       <ScrollView 
-        contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
-        style={styles.container} 
+        contentContainerStyle={{ padding: 24, paddingBottom: 80 }}
+        style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" />}
-      >  
-        <Text style={styles.header}>{todayWorkout?.name || 'Workout'}</Text>  
+      >
+        <TouchableOpacity 
+          style={styles.backButtonHeader} 
+          onPress={() => setSelectedDay(null)}
+        >
+          <Text style={styles.backText}>← Back to Workout Hub</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.header}>{selectedWorkout.name}</Text>
+        
         {isYellow && (
           <Text style={styles.banner}>
-            Consider a lighter session today — you're at {Math.round((proteinToday / (profile?.protein_target_g || 100)) * 100)}% of your protein goal.
+            Yellow Fuel Level: Sets are scaled to 2 to prevent muscle catabolism.
           </Text>
-        )}  
-        <Text style={styles.duration}>{todayWorkout?.duration_min || 25} min • {exercises.length} exercises</Text>  
+        )}
         
-        {exercises.map((ex: any, i: number) => (  
-          <View key={i} style={styles.exerciseCard}>  
-            <Text style={styles.exerciseName}>{ex.name}</Text>  
-            <Text style={styles.exerciseReps}>{isYellow ? 2 : ex.sets} sets × {ex.reps}</Text>  
-            <Text style={styles.exerciseCue}>{ex.cue}</Text>  
-            {ex.band_mod && <Text style={styles.bandMod}>Band: {ex.band_mod}</Text>}  
-          </View>  
-        ))}  
-        
-        <TouchableOpacity style={styles.button} onPress={handleCompleteWorkout}>  
+        {isOrange && (
+          <Text style={styles.banner}>
+            Orange Fuel Level: Low fuel. Sets are scaled to 1. Stay light.
+          </Text>
+        )}
+
+        <Text style={styles.duration}>
+          {selectedWorkout.duration_min} min • {completedCount}/{exercisesCount} Completed
+        </Text>
+
+        {exercises.map((ex: any, i: number) => {
+          const sets = getSetsCount(ex, i);
+          const isSwapped = !!swappedExercises[i];
+          const isChecked = !!completedExercises[i];
+          const displayName = isSwapped ? (bodyweightAlternatives[ex.name] || `${ex.name} (Alt)`) : ex.name;
+
+          return (
+            <View 
+              key={i} 
+              style={[
+                styles.exerciseCard, 
+                isChecked && styles.exerciseCardChecked
+              ]}
+            >
+              <View style={styles.exerciseHeaderRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.exerciseName}>{displayName}</Text>
+                  <Text style={styles.exerciseReps}>
+                    {sets} sets × {ex.reps}
+                  </Text>
+                </View>
+                
+                <TouchableOpacity 
+                  style={[styles.checkboxContainer, isChecked && styles.checkboxChecked]}
+                  onPress={() => {
+                    setCompletedExercises(prev => ({ ...prev, [i]: !prev[i] }));
+                    Haptics.impactAsync(isChecked ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium);
+                  }}
+                >
+                  {isChecked && <Text style={styles.checkboxText}>✓</Text>}
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.exerciseCue}>{ex.cue}</Text>
+              {ex.band_mod && !isSwapped && <Text style={styles.bandMod}>Band: {ex.band_mod}</Text>}
+              {isSwapped && <Text style={styles.bandMod}>Bodyweight variation active</Text>}
+
+              <View style={styles.cardControlsRow}>
+                <TouchableOpacity 
+                  style={[styles.swapBtn, isSwapped && styles.swapBtnActive]}
+                  onPress={() => toggleSwap(i)}
+                >
+                  <Text style={styles.swapBtnText}>
+                    {isSwapped ? 'Swapped to Alt' : 'Swap to Bodyweight'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.adjusterRow}>
+                  <Text style={styles.adjusterLabel}>Sets:</Text>
+                  <TouchableOpacity 
+                    style={styles.adjusterBtn}
+                    onPress={() => adjustSets(i, -1, ex.sets)}
+                  >
+                    <Text style={styles.buttonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.adjusterVal}>{sets}</Text>
+                  <TouchableOpacity 
+                    style={styles.adjusterBtn}
+                    onPress={() => adjustSets(i, 1, ex.sets)}
+                  >
+                    <Text style={styles.buttonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
+        <TouchableOpacity 
+          style={[styles.button, { marginTop: 12 }]} 
+          onPress={handleCompleteWorkout}
+        >  
           <Text style={styles.buttonText}>Complete Workout</Text>  
         </TouchableOpacity>  
       </ScrollView>
-
-      <LogBottomSheet
-        visible={logSheetVisible}
-        onDismiss={() => setLogSheetVisible(false)}
-        onLogged={loadData}
-        defaultTab="protein"
-      />
     </View>
   );  
-}
-
+}  
+  
 const styles = StyleSheet.create({  
   container: { flex: 1, backgroundColor: '#0f172a' },  
   header: { fontSize: 28, fontWeight: 'bold', color: '#f8fafc', marginBottom: 12 },  
@@ -325,4 +502,38 @@ const styles = StyleSheet.create({
   successIcon: { fontSize: 48, color: '#10b981', fontWeight: 'bold', marginBottom: 16 },
   successTitle: { fontSize: 20, fontWeight: 'bold', color: '#f8fafc', marginBottom: 12, textAlign: 'center' },
   successText: { fontSize: 14, color: '#94a3b8', textAlign: 'center', lineHeight: 20 },
+
+  // Added Styles for Premium Hub & Interactions
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#cbd5e1', marginTop: 24, marginBottom: 12 },
+  backButtonHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  backText: { color: '#0ea5e9', fontSize: 16 },
+  fuelCard: { borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1 },
+  fuelCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#f8fafc', marginBottom: 6 },
+  fuelCardDesc: { fontSize: 14, color: '#94a3b8', lineHeight: 20 },
+  dayCard: { backgroundColor: '#1e293b', borderRadius: 16, padding: 18, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1.5, borderColor: '#334155' },
+  dayCardSelected: { borderColor: '#0ea5e9', backgroundColor: '#0ea5e905' },
+  dayLeft: { flex: 1 },
+  dayLabel: { fontSize: 12, color: '#0ea5e9', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
+  dayTitle: { fontSize: 17, fontWeight: 'bold', color: '#f8fafc' },
+  dayMeta: { fontSize: 13, color: '#94a3b8', marginTop: 6 },
+  statusPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  statusTextPill: { fontSize: 11, fontWeight: 'bold' },
+  
+  exerciseHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  checkboxContainer: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#475569', justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { borderColor: '#10b981', backgroundColor: '#10b981' },
+  checkboxText: { color: '#f8fafc', fontSize: 14, fontWeight: 'bold' },
+  exerciseCardChecked: { opacity: 0.6, borderColor: '#10b98130', borderWidth: 1 },
+  
+  cardControlsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155' },
+  swapBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#334155' },
+  swapBtnActive: { backgroundColor: '#0ea5e920', borderWidth: 1, borderColor: '#0ea5e9' },
+  swapBtnText: { color: '#cbd5e1', fontSize: 12, fontWeight: '600' },
+  adjusterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  adjusterBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' },
+  adjusterLabel: { color: '#cbd5e1', fontSize: 13, fontWeight: '500' },
+  adjusterVal: { color: '#0ea5e9', fontSize: 14, fontWeight: 'bold' },
+  
+  bypassBtn: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 16, alignSelf: 'center' },
+  bypassBtnText: { color: '#64748b', fontSize: 12, textDecorationLine: 'underline' },
 });  
