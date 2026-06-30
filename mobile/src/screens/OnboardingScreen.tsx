@@ -1,5 +1,5 @@
 import React, { useState } from 'react';  
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, ActivityIndicator } from 'react-native';  
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch, ActivityIndicator, Animated } from 'react-native';  
 import Slider from '@react-native-community/slider';
 import { supabase } from '../lib/supabase';  
 import { useAuth } from '../hooks/useAuth';
@@ -19,14 +19,20 @@ export default function OnboardingScreen() {
   // State for step 2
   const [tier, setTier] = useState<'glp1' | 'longevity'>('glp1');  
 
-  // State for step 3
+  // State for new step 3 (Texture Preference)
+  const [texturePreference, setTexturePreference] = useState<'liquid' | 'soft' | 'standard' | 'emergency'>('standard');
+
+  // State for new step 4 (Nudge Sensitivity)
+  const [nudgeSensitivity, setNudgeSensitivity] = useState<'gentle' | 'standard' | 'aggressive'>('standard');
+
+  // State for step 5 (Clinic Code)
   const [clinicCode, setClinicCode] = useState('');  
   const [clinicId, setClinicId] = useState<string | null>(null);  
   const [clinicName, setClinicName] = useState<string | null>(null);  
   const [inlineError, setInlineError] = useState('');
   const [loadingClinic, setLoadingClinic] = useState(false);
 
-  // State for step 4
+  // State for step 6 (Notification Settings)
   const [mealReminder, setMealReminder] = useState(true);
   const [hydrationNudges, setHydrationNudges] = useState(true);
   const [reminderHour, setReminderHour] = useState(8);
@@ -35,7 +41,25 @@ export default function OnboardingScreen() {
   // Loading state for final step
   const [loading, setLoading] = useState(false);
 
-  const totalSteps = 6;
+  // Animation values for premium transition feel
+  const fadeAnim = useState(new Animated.Value(1))[0];
+
+  const totalSteps = 8;
+
+  const animateToStep = (nextStep: number) => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 120,
+      useNativeDriver: true,
+    }).start(() => {
+      setStep(nextStep);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
 
   const handleNext = async () => {  
     if (step === 0) {
@@ -47,7 +71,7 @@ export default function OnboardingScreen() {
         Alert.alert('Invalid Name', 'First name cannot contain numbers');
         return;
       }
-      setStep(1);
+      animateToStep(1);
     } 
     else if (step === 1) {
       const weight = parseFloat(bodyWeightLbs);
@@ -55,25 +79,31 @@ export default function OnboardingScreen() {
         Alert.alert('Required', 'Please enter a valid body weight in lbs');
         return;
       }
-      setStep(2);
+      animateToStep(2);
     } 
     else if (step === 2) {
-      setStep(3);
+      animateToStep(3);
     } 
     else if (step === 3) {
+      animateToStep(4);
+    }
+    else if (step === 4) {
+      animateToStep(5);
+    }
+    else if (step === 5) {
       await handleClinicValidation();
     } 
-    else if (step === 4) {
-      setStep(5);
+    else if (step === 6) {
+      animateToStep(7);
     } 
-    else if (step === 5) {
+    else if (step === 7) {
       await completeOnboarding();
     }
   };
 
   const handleBack = () => {  
     if (step > 0) {
-      setStep(step - 1);  
+      animateToStep(step - 1);  
       setInlineError(''); // Clear any errors on back navigation
     }  
   };
@@ -94,18 +124,16 @@ export default function OnboardingScreen() {
       setClinicId(null);
       setClinicName(null);
       setInlineError('');
-      setStep(4);
+      animateToStep(6);
       return;
     }
 
     setLoadingClinic(true);
     setInlineError('');
     try {
+      // Securely validation clinic code using RPC instead of public Select query
       const { data, error } = await supabase
-        .from('clinics')
-        .select('id, name')
-        .eq('referral_code', code)
-        .maybeSingle();
+        .rpc('verify_clinic_code', { code_param: code });
 
       if (error) {
         console.error(error);
@@ -113,11 +141,12 @@ export default function OnboardingScreen() {
         return;
       }
 
-      if (data) {
-        setClinicId(data.id);
-        setClinicName(data.name);
+      if (data && data.length > 0) {
+        const clinic = data[0];
+        setClinicId(clinic.id);
+        setClinicName(clinic.name);
         setInlineError('');
-        setStep(4);
+        animateToStep(6);
       } else {
         setInlineError("That code doesn't match any clinic. Check with your provider.");
       }
@@ -152,6 +181,8 @@ export default function OnboardingScreen() {
         body_weight_kg,  
         protein_target_g: proteinTarget,  
         tier,  
+        texture_preference: texturePreference,
+        nudge_sensitivity: nudgeSensitivity,
         clinic_id: clinicId || null,  
         hydration_target_oz: 64,  
         onboarding_complete: true,  
@@ -169,7 +200,9 @@ export default function OnboardingScreen() {
       await trackEvent('onboarding_completed', {
         tier,
         clinic_id: clinicId || null,
-        protein_target_g: proteinTarget
+        protein_target_g: proteinTarget,
+        texture_preference: texturePreference,
+        nudge_sensitivity: nudgeSensitivity
       });
 
       // 2. Update auth metadata so navigation gate passes
@@ -267,6 +300,69 @@ export default function OnboardingScreen() {
       case 3:  
         return (  
           <View style={styles.stepContainer}>  
+            <Text style={styles.title}>Food Texture Program</Text>  
+            <Text style={styles.subtitle}>GLP-1 therapy can sometimes cause mild nausea. Select a texture preference that aligns with your daily comfort.</Text>  
+            <TouchableOpacity 
+              style={[styles.card, texturePreference === 'standard' && styles.cardActive]} 
+              onPress={() => setTexturePreference('standard')}
+            >  
+              <Text style={styles.cardTitle}>Standard Program</Text>  
+              <Text style={styles.cardSub}>Standard solid meals — for normal days with regular appetite.</Text>  
+            </TouchableOpacity>  
+            <TouchableOpacity 
+              style={[styles.card, texturePreference === 'soft' && styles.cardActive]} 
+              onPress={() => setTexturePreference('soft')}
+            >  
+              <Text style={styles.cardTitle}>Soft Foods</Text>  
+              <Text style={styles.cardSub}>Gentle, easily digestible textures (oats, purées, eggs).</Text>  
+            </TouchableOpacity>  
+            <TouchableOpacity 
+              style={[styles.card, texturePreference === 'liquid' && styles.cardActive]} 
+              onPress={() => setTexturePreference('liquid')}
+            >  
+              <Text style={styles.cardTitle}>Liquid Priority</Text>  
+              <Text style={styles.cardSub}>Smoothies, protein shakes, and broths — for low-appetite days.</Text>  
+            </TouchableOpacity>  
+            <TouchableOpacity 
+              style={[styles.card, texturePreference === 'emergency' && styles.cardActive]} 
+              onPress={() => setTexturePreference('emergency')}
+            >  
+              <Text style={styles.cardTitle}>Emergency Relief</Text>  
+              <Text style={styles.cardSub}>Bland foods and high hydration target — to actively combat nausea.</Text>  
+            </TouchableOpacity>  
+          </View>  
+        );  
+      case 4:  
+        return (  
+          <View style={styles.stepContainer}>  
+            <Text style={styles.title}>Accountability Nudges</Text>  
+            <Text style={styles.subtitle}>Choose how persistent our reminders should be to keep you on track with your goals.</Text>  
+            <TouchableOpacity 
+              style={[styles.card, nudgeSensitivity === 'gentle' && styles.cardActive]} 
+              onPress={() => setNudgeSensitivity('gentle')}
+            >  
+              <Text style={styles.cardTitle}>Gentle Nudges</Text>  
+              <Text style={styles.cardSub}>Minimal notifications. We'll only check in when you are significantly behind.</Text>  
+            </TouchableOpacity>  
+            <TouchableOpacity 
+              style={[styles.card, nudgeSensitivity === 'standard' && styles.cardActive]} 
+              onPress={() => setNudgeSensitivity('standard')}
+            >  
+              <Text style={styles.cardTitle}>Standard Program</Text>  
+              <Text style={styles.cardSub}>Balanced notifications to help you stay structured throughout the day.</Text>  
+            </TouchableOpacity>  
+            <TouchableOpacity 
+              style={[styles.card, nudgeSensitivity === 'aggressive' && styles.cardActive]} 
+              onPress={() => setNudgeSensitivity('aggressive')}
+            >  
+              <Text style={styles.cardTitle}>Aggressive Accountability</Text>  
+              <Text style={styles.cardSub}>Frequent checks and prompts if you begin to risk missing your daily macros.</Text>  
+            </TouchableOpacity>  
+          </View>  
+        );  
+      case 5:  
+        return (  
+          <View style={styles.stepContainer}>  
             <Text style={styles.title}>Clinic Referral Code</Text>  
             <Text style={styles.subtitle}>Connect your account directly with your physician.</Text>  
             <TextInput 
@@ -289,7 +385,7 @@ export default function OnboardingScreen() {
                     setClinicId(null);
                     setClinicName(null);
                     setInlineError('');
-                    setStep(4);
+                    animateToStep(6);
                   }}
                 >
                   <Text style={styles.skipButtonText}>Continue without code</Text>
@@ -298,7 +394,7 @@ export default function OnboardingScreen() {
             ) : null}
           </View>  
         );  
-      case 4:  
+      case 6:  
         return (  
           <View style={styles.stepContainer}>  
             <Text style={styles.title}>Notification Settings</Text>  
@@ -316,7 +412,7 @@ export default function OnboardingScreen() {
                 thumbColor={mealReminder ? '#f8fafc' : '#94a3b8'}
               />
             </View>
-
+ 
             <View style={styles.toggleRow}>
               <View style={styles.toggleTextContainer}>
                 <Text style={styles.toggleLabel}>Hydration nudges</Text>
@@ -329,7 +425,7 @@ export default function OnboardingScreen() {
                 thumbColor={hydrationNudges ? '#f8fafc' : '#94a3b8'}
               />
             </View>
-
+ 
             {mealReminder && (
               <View style={styles.timePickerContainer}>
                 <Text style={styles.timePickerTitle}>First reminder at</Text>
@@ -371,7 +467,7 @@ export default function OnboardingScreen() {
             )}
           </View>  
         );  
-      case 5:  
+      case 7:  
         return (  
           <View style={styles.stepContainer}>  
             <Text style={styles.title}>Review Your Program</Text>  
@@ -393,6 +489,18 @@ export default function OnboardingScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Program</Text>
                 <Text style={styles.summaryValue}>{tier === 'glp1' ? 'GLP-1 Program' : 'Longevity Program'}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Texture Preference</Text>
+                <Text style={styles.summaryValue}>
+                  {texturePreference.charAt(0).toUpperCase() + texturePreference.slice(1)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Nudge Frequency</Text>
+                <Text style={styles.summaryValue}>
+                  {nudgeSensitivity.charAt(0).toUpperCase() + nudgeSensitivity.slice(1)}
+                </Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Clinic</Text>
@@ -420,9 +528,9 @@ export default function OnboardingScreen() {
         <View style={styles.progressBar}>  
           <View style={[styles.progressFill, { width: `${((step + 1) / totalSteps) * 100}%` }]} />  
         </View>  
-        <View style={styles.content}>  
+        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>  
           {renderStep()}  
-        </View>  
+        </Animated.View>  
       </ScrollView>  
       
       <View style={styles.footer}>  

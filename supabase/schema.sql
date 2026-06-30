@@ -184,16 +184,32 @@ ALTER TABLE public.nudge_schedule ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 
 -- Policies for clinics
-CREATE POLICY "Anyone can read clinics" ON public.clinics
-  FOR SELECT USING (true);
+CREATE POLICY "Clinicians can read their own clinic" ON public.clinics
+  FOR SELECT USING (id IN (SELECT clinic_id FROM public.clinic_users WHERE id = auth.uid()));
 
 -- Policies for clinic_users
 CREATE POLICY "Clinicians can read their own profile" ON public.clinic_users
   FOR SELECT USING (auth.uid() = id);
 
 -- Policies for profiles
-CREATE POLICY "Users can manage their own profile" ON public.profiles
-  FOR ALL USING (auth.uid() = id);
+CREATE POLICY "Users can view their own profile" ON public.profiles
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert their own profile" ON public.profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update their own profile fields" ON public.profiles
+  FOR UPDATE 
+  USING (auth.uid() = id) 
+  WITH CHECK (
+    auth.uid() = id AND 
+    (stripe_customer_id IS NOT DISTINCT FROM (SELECT stripe_customer_id FROM public.profiles WHERE id = auth.uid())) AND 
+    (stripe_subscription_id IS NOT DISTINCT FROM (SELECT stripe_subscription_id FROM public.profiles WHERE id = auth.uid())) AND 
+    (subscription_status IS NOT DISTINCT FROM (SELECT subscription_status FROM public.profiles WHERE id = auth.uid()))
+  );
+
+CREATE POLICY "Users can delete their own profile" ON public.profiles
+  FOR DELETE USING (auth.uid() = id);
 
 CREATE POLICY "Clinicians can view patient profiles in their clinic" ON public.profiles
   FOR SELECT USING (clinic_id IN (SELECT clinic_id FROM public.clinic_users WHERE id = auth.uid()));
@@ -208,11 +224,20 @@ CREATE POLICY "Users can manage their own meal_selections" ON public.meal_select
 CREATE POLICY "Users can manage their own protein_logs" ON public.protein_logs
   FOR ALL USING (auth.uid() = user_id);
 
+CREATE POLICY "Clinicians can view patient protein_logs" ON public.protein_logs
+  FOR SELECT USING (user_id IN (SELECT p.id FROM public.profiles p WHERE p.clinic_id IN (SELECT cu.clinic_id FROM public.clinic_users cu WHERE cu.id = auth.uid())));
+
 CREATE POLICY "Users can manage their own nudge_events" ON public.nudge_events
   FOR ALL USING (auth.uid() = user_id);
 
+CREATE POLICY "Clinicians can view patient nudge_events" ON public.nudge_events
+  FOR SELECT USING (user_id IN (SELECT p.id FROM public.profiles p WHERE p.clinic_id IN (SELECT cu.clinic_id FROM public.clinic_users cu WHERE cu.id = auth.uid())));
+
 CREATE POLICY "Users can manage their own workout_logs" ON public.workout_logs
   FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Clinicians can view patient workout_logs" ON public.workout_logs
+  FOR SELECT USING (user_id IN (SELECT p.id FROM public.profiles p WHERE p.clinic_id IN (SELECT cu.clinic_id FROM public.clinic_users cu WHERE cu.id = auth.uid())));
 
 CREATE POLICY "Users can manage their own grocery_lists" ON public.grocery_lists
   FOR ALL USING (auth.uid() = user_id);
@@ -360,5 +385,18 @@ BEGIN
   LEFT JOIN weekly_protein_avg pa ON pp.p_id = pa.user_id
   LEFT JOIN weekly_nudges wn ON pp.p_id = wn.user_id
   LEFT JOIN weekly_workouts ww ON pp.p_id = ww.user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================
+-- RPC: VERIFY CLINIC CODE (Blind Verification)
+-- ============================================
+CREATE OR REPLACE FUNCTION public.verify_clinic_code(code_param text)
+RETURNS TABLE (id uuid, name text) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT c.id, c.name 
+  FROM public.clinics c 
+  WHERE c.referral_code = UPPER(TRIM(code_param));
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
