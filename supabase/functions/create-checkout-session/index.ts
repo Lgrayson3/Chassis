@@ -41,7 +41,7 @@ serve(async (req) => {
 
       const session = await stripe.billingPortal.sessions.create({
         customer: profile.stripe_customer_id,
-        return_url: 'https://app.chassis.health/settings',
+        return_url: 'https://chassis-tan.vercel.app/settings',
       })
 
       return new Response(JSON.stringify({ url: session.url }), {
@@ -54,8 +54,8 @@ serve(async (req) => {
         mode: 'subscription',
         customer_email: userEmail,
         line_items: [{ price: Deno.env.get('STRIPE_PRICE_ID') ?? '', quantity: 1 }],
-        success_url: 'https://app.chassis.health/success',
-        cancel_url: 'https://app.chassis.health/settings',
+        success_url: 'https://chassis-tan.vercel.app/success',
+        cancel_url: 'https://chassis-tan.vercel.app/settings',
         metadata: { user_id: userId },
       })
 

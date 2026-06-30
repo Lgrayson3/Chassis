@@ -75,10 +75,10 @@ export default function ClinicSettings({ clinicUser }: { clinicUser: any }) {
           <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 8 }}>Invite Link</div>  
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>  
             <span style={{ color: '#cbd5e1', fontSize: 14 }}>  
-              https://app.chassis.health/join?code={referralCode}  
+              https://chassis-tan.vercel.app/join?code={referralCode}  
             </span>  
             <button   
-              onClick={() => copyToClipboard(`https://app.chassis.health/join?code=${referralCode}`)}  
+              onClick={() => copyToClipboard(`https://chassis-tan.vercel.app/join?code=${referralCode}`)}  
               style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#334155', color: '#f8fafc', cursor: 'pointer' }}  
             >  
               Copy link  
